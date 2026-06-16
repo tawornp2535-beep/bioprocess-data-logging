@@ -3,73 +3,101 @@
     {
       "id": "m1",
       "name": "Bioreactor 1"
+    },
+    {
+      "id": "m-1781586311991",
+      "name": "Fermenters 500L"
     }
   ],
   "jobs": [
     {
-      "id": "job-001",
-      "machineId": "m1",
-      "name": "ทดลองเก็บข้อมูล Batch 1",
-      "createdAt": "2024-12-01 10:00",
+      "id": "job-1781586334700",
+      "machineId": "m-1781586311991",
+      "name": "KMP",
+      "createdAt": "6/16/2026, 12:05:34 PM",
       "data": [
         {
-          "timestamp": "2024-12-01T10:00:00.000Z",
-          "date": "2024-12-01",
-          "time": "10:00",
-          "temp_set": 37.0,
-          "temp_read": 37.5,
-          "ph_set": 7.0,
+          "timestamp": "2026-06-16T05:06:00.000Z",
+          "date": "2026-06-16",
+          "time": "12:06",
+          "temp_set": 38,
+          "temp_read": 38,
+          "ph_set": 7.2,
           "ph_read": 7.2,
-          "do_set": 80,
-          "do_read": 85,
+          "do_set": 0,
+          "do_read": 100,
           "agit_set": 200,
           "agit_read": 200,
-          "air_set": 2.0,
-          "air_read": 2.0,
-          "remark": "เริ่มต้นการทดลอง"
+          "air_set": 24,
+          "air_read": 24,
+          "remark": ""
         },
         {
-          "timestamp": "2024-12-01T11:00:00.000Z",
-          "date": "2024-12-01",
-          "time": "11:00",
-          "temp_set": 37.0,
-          "temp_read": 37.6,
-          "ph_set": 7.0,
-          "ph_read": 7.1,
-          "do_set": 80,
-          "do_read": 88,
+          "timestamp": "2026-06-16T05:11:00.000Z",
+          "date": "2026-06-16",
+          "time": "12:11",
+          "temp_set": 38,
+          "temp_read": 38,
+          "ph_set": 7.2,
+          "ph_read": 7.2,
+          "do_set": 0,
+          "do_read": 100,
           "agit_set": 200,
           "agit_read": 200,
-          "air_set": 2.0,
-          "air_read": 2.1,
-          "remark": "ต่อเนื่องปกติ"
+          "air_set": 24,
+          "air_read": 24,
+          "remark": ""
         },
         {
-          "timestamp": "2024-12-01T12:00:00.000Z",
-          "date": "2024-12-01",
-          "time": "12:00",
-          "temp_set": 37.0,
-          "temp_read": 37.5,
-          "ph_set": 7.0,
-          "ph_read": 7.2,
-          "do_set": 80,
-          "do_read": 86,
+          "timestamp": "2026-06-16T05:12:00.000Z",
+          "date": "2026-06-16",
+          "time": "12:12",
+          "temp_set": 38,
+          "temp_read": 37.9,
+          "ph_set": 7.2,
+          "ph_read": 7.12,
+          "do_set": 0,
+          "do_read": 96,
           "agit_set": 200,
-          "agit_read": 200,
-          "air_set": 2.0,
-          "air_read": 2.0,
-          "remark": "ข้อมูลคงที่"
+          "agit_read": 196,
+          "air_set": 24,
+          "air_read": 24,
+          "remark": ""
+        },
+        {
+          "timestamp": "2026-06-16T05:13:00.000Z",
+          "date": "2026-06-16",
+          "time": "12:13",
+          "temp_set": 38,
+          "temp_read": 37.4,
+          "ph_set": 7.21,
+          "ph_read": 6.97,
+          "do_set": 0,
+          "do_read": 81,
+          "agit_set": 200,
+          "agit_read": 204,
+          "air_set": 24,
+          "air_read": 24,
+          "remark": ""
+        },
+        {
+          "timestamp": "2026-06-16T05:14:00.000Z",
+          "date": "2026-06-16",
+          "time": "12:14",
+          "temp_set": 38,
+          "temp_read": 37.2,
+          "ph_set": 7.21,
+          "ph_read": 6.91,
+          "do_set": 0,
+          "do_read": 79,
+          "agit_set": 200,
+          "agit_read": 202,
+          "air_set": 24,
+          "air_read": 24,
+          "remark": "เติม Antifoam "
         }
       ]
     }
   ],
-  "customers": [
-    {
-      "id": "cust-001",
-      "companyName": "บริษัท BioPro",
-      "machineId": "m1",
-      "email": "info@biopro.com",
-      "createdAt": "2024-12-01 09:00"
-    }
-  ]
+  "customers": []
 }

@@ -9,13 +9,16 @@
     "start": "node server.js",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:migrate": "node migrate-to-firestore.js"
+
   },
   "dependencies": {
     "concurrently": "^10.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "firebase-admin": "^14.0.0",
     "lucide-react": "^1.18.0",
     "mongodb": "^7.3.0",
     "mongoose": "^9.7.0",

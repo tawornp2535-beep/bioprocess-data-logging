@@ -5,7 +5,9 @@ import {
 import { 
   Activity, Droplets, Wind, Thermometer, RotateCw, PlusCircle, 
   Download, LayoutDashboard, LineChart as ChartIcon, FolderPlus, Trash2, FolderOpen,
-  Table as TableIcon, Users, Activity as ActivityIcon, Edit3
+  Table as TableIcon, Users, Activity as ActivityIcon, Edit3,
+  ChevronDown, ChevronUp, ChevronRight, Settings, LogOut, Cpu, Database, Folder,
+  Menu, X
 } from 'lucide-react';
 import './index.css';
 import './form.css';
@@ -80,6 +82,9 @@ function App() {
 
   // Global View State
   const [currentAppView, setCurrentAppView] = useState('monitoring'); // 'monitoring' | 'customers'
+  const [isInstrumentsExpanded, setIsInstrumentsExpanded] = useState(true);
+  const [isSessionsExpanded, setIsSessionsExpanded] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Load States from Backend
   const [machines, setMachines] = useState([]);
@@ -436,7 +441,7 @@ function App() {
         const res = await fetch(`/api/machines/${currentMachineId}`, {
           method: 'DELETE'
         });
-        if (isCloud) {
+        if (res.ok) {
           const data = await res.json();
           applyDBUpdate(data);
           
@@ -906,193 +911,264 @@ function App() {
           </div>
         </div>
       )}
+      {/* Mobile Header Bar */}
+      <div className="mobile-topbar">
+        <button 
+          onClick={() => setIsMobileMenuOpen(true)}
+          style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+        >
+          <Menu size={24} />
+        </button>
+        <span className="mobile-topbar-title">
+          <ActivityIcon size={20} style={{ color: '#00f0ff', filter: 'drop-shadow(0 0 6px rgba(0, 240, 255, 0.5))' }} />
+          BIOPROCESS
+        </span>
+        <span style={{ fontSize: '0.8rem', color: '#84b2bc', fontWeight: 600 }}>
+          {currentMachine?.name || 'Bioprocess'}
+        </span>
+      </div>
+
+      {/* Backdrop overlay for mobile menu */}
+      {isMobileMenuOpen && (
+        <div 
+          className="mobile-overlay" 
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="sidebar">
-        <div className="sidebar-header" style={{ paddingBottom: '1rem' }}>
-          <h1 style={{ marginBottom: '1.5rem' }}>Bioprocess</h1>
-          
-          {/* Main App Navigation (Admin only) */}
-          {userRole === 'admin' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-              <button 
-                className={`nav-tab ${currentAppView === 'monitoring' ? 'active' : ''}`}
-                onClick={() => setCurrentAppView('monitoring')}
-                style={{ justifyContent: 'flex-start', padding: '10px 16px' }}
-              >
-                <ActivityIcon size={18} /> Monitoring & Logging
-              </button>
-              <button 
-                className={`nav-tab ${currentAppView === 'customers' ? 'active' : ''}`}
-                onClick={() => setCurrentAppView('customers')}
-                style={{ justifyContent: 'flex-start', padding: '10px 16px' }}
-              >
-                <Users size={18} /> Customer Data
-              </button>
+      <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
+        {/* Header */}
+        <div className="sidebar-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <ActivityIcon size={28} style={{ color: '#00f0ff', filter: 'drop-shadow(0 0 6px rgba(0, 240, 255, 0.5))' }} />
+              <div>
+                <div className="sidebar-logo-text">BIOPROCESS</div>
+                <div className="sidebar-logo-subtext">SYSTEM ULTRA</div>
+              </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>👤 Customer Portal</span>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-blue)', wordBreak: 'break-all' }}>
-                ID: {activeCustomerJobId}
-              </span>
-              {showCustomerBanner && (
-                <div style={{ marginTop: '10px', padding: '10px', borderRadius: '8px', background: 'linear-gradient(90deg, rgba(255,244,229,0.06), rgba(255,250,240,0.03))', borderLeft: '4px solid var(--accent-yellow)', color: 'var(--text-primary)', fontSize: '0.9rem', lineHeight: 1.3 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, marginBottom: '6px' }}>⚠️ ข้อความแจ้งเตือนการเข้าถึงและบันทึกข้อมูล</div>
-                      <div style={{ color: 'var(--text-secondary)' }}>• สิทธิ์การเข้าถึง: รหัสผ่านนี้สามารถใช้เข้าดูได้เฉพาะข้อมูลในส่วนงานของลูกค้าที่ได้รับอนุญาตเท่านั้น</div>
-                      <div style={{ color: 'var(--text-secondary)' }}>• การรักษาความลับ: ข้อมูลทั้งหมดจะถูกจัดเก็บและรักษาไว้เป็นความลับสูงสุด</div>
-                      <div style={{ color: 'var(--text-secondary)' }}>• การสำรองข้อมูล: ระบบจะทำการสำรองข้อมูลไว้เป็นเวลา 7 วัน หลังจากเสร็จสิ้นงาน</div>
+            {/* Close button on mobile sidebar header */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(false)}
+              style={{ background: 'transparent', border: 'none', color: '#84b2bc', cursor: 'pointer', display: 'none' }}
+              className="mobile-close-btn"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Menu */}
+        <div className="sidebar-menu">
+          {userRole === 'admin' ? (
+            <>
+              {/* Menu Dashboard */}
+              <div 
+                className={`sidebar-menu-item ${currentAppView === 'monitoring' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('monitoring');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <span className="sidebar-menu-link">
+                  <LayoutDashboard size={18} />
+                  Dashboard / Monitor
+                </span>
+              </div>
+
+              {/* Menu Customer Database */}
+              <div 
+                className={`sidebar-menu-item ${currentAppView === 'customers' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('customers');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <span className="sidebar-menu-link">
+                  <Users size={18} />
+                  Customer Database
+                </span>
+                <span className="sidebar-badge">{customers.length}</span>
+              </div>
+
+              {/* Instrument Accordion */}
+              <div 
+                className="sidebar-menu-item"
+                onClick={() => setIsInstrumentsExpanded(!isInstrumentsExpanded)}
+              >
+                <span className="sidebar-menu-link">
+                  <Cpu size={18} />
+                  Instruments
+                </span>
+                <span className="sidebar-menu-arrow">
+                  {isInstrumentsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </span>
+              </div>
+              
+              {isInstrumentsExpanded && (
+                <div className="sidebar-submenu">
+                  {machines.map(m => (
+                    <div 
+                      key={m.id}
+                      className={`sidebar-submenu-item ${m.id === currentMachineId && currentAppView === 'monitoring' ? 'active' : ''}`}
+                      onClick={() => {
+                        setCurrentAppView('monitoring');
+                        setCurrentMachineId(m.id);
+                        setIsMobileMenuOpen(false);
+                        // Filter and auto-select first job for this machine
+                        const machineJobs = jobs.filter(j => j.machineId === m.id);
+                        if (machineJobs.length > 0) {
+                          setCurrentJobId(machineJobs[0].id);
+                        } else {
+                          setCurrentJobId(null);
+                        }
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                        {m.id === currentMachineId && currentAppView === 'monitoring' && <span className="sidebar-submenu-dot" />}
+                        {m.name}
+                      </span>
+                      {m.id === currentMachineId && (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                          <Edit3 size={13} style={{ cursor: 'pointer', opacity: 0.8 }} onClick={renameMachine} title="Rename" />
+                          {machines.length > 1 && (
+                            <Trash2 size={13} style={{ cursor: 'pointer', color: '#ef4444', opacity: 0.8 }} onClick={deleteMachine} title="Delete" />
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <button onClick={() => setShowCustomerBanner(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
+                  ))}
+                  <div 
+                    className="sidebar-submenu-item" 
+                    style={{ color: '#00f0ff', fontWeight: 600 }}
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleMachineChange({ target: { value: 'ADD_NEW' } });
+                    }}
+                  >
+                    + Add Instrument...
+                  </div>
+                </div>
+              )}
+
+              {/* Sessions Accordion */}
+              {currentAppView === 'monitoring' && currentMachineId && (
+                <>
+                  <div 
+                    className="sidebar-menu-item"
+                    onClick={() => setIsSessionsExpanded(!isSessionsExpanded)}
+                  >
+                    <span className="sidebar-menu-link">
+                      <FolderOpen size={18} />
+                      Sessions
+                    </span>
+                    <span className="sidebar-menu-arrow">
+                      {isSessionsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </span>
+                  </div>
+                  
+                  {isSessionsExpanded && (
+                    <div className="sidebar-submenu">
+                      {jobsForMachine.map(job => (
+                        <div 
+                          key={job.id}
+                          className={`sidebar-submenu-item ${job.id === currentJobId ? 'active' : ''}`}
+                          onClick={() => {
+                            setCurrentJobId(job.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '6px 8px' }}
+                        >
+                          <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', fontWeight: job.id === currentJobId ? '600' : 'normal', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                              {job.id === currentJobId && <span className="sidebar-submenu-dot" />}
+                              {job.name}
+                            </span>
+                            <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                              <Trash2 size={13} style={{ cursor: 'pointer', color: '#ef4444', opacity: 0.8 }} onClick={(e) => deleteJob(job.id, e)} title="Delete Session" />
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.7rem', color: '#688d96', marginTop: '2px' }}>
+                            <span>{job.createdAt.split(',')[0]}</span>
+                            <span 
+                              style={{ color: '#00f0ff', cursor: 'pointer', background: 'rgba(0, 240, 255, 0.05)', padding: '0 4px', borderRadius: '3px' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(job.id);
+                                alert(`คัดลอกรหัสงานเรียบร้อย: ${job.id}`);
+                              }}
+                              title="Click to copy Code"
+                            >
+                              Code: {job.id.substring(4, 9)}..
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      <div 
+                        className="sidebar-submenu-item"
+                        style={{ color: '#00f0ff', fontWeight: 600 }}
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          createNewJob();
+                        }}
+                      >
+                        + Add Session...
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            /* Customer Portal Navigation */
+            <div style={{ padding: '0 1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1rem' }}>
+                <div style={{ fontSize: '0.75rem', color: '#84b2bc', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>👤 Customer Portal</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#00f0ff', wordBreak: 'break-all' }}>ID: {activeCustomerJobId}</div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#84b2bc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Instrument</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#ffffff', marginTop: '0.25rem' }}>{currentMachine?.name}</div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#84b2bc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#ffffff', marginTop: '0.25rem' }}>{currentJob?.name}</div>
+              </div>
+
+              {showCustomerBanner && (
+                <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', borderLeft: '3px solid #f59e0b', fontSize: '0.8rem', lineHeight: 1.4, color: '#cbdce0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#f59e0b', marginBottom: '4px' }}>⚠️ บันทึกข้อมูลและสิทธิ์</div>
+                      <div>• สิทธิ์ในการอ่านข้อมูลเท่านั้น</div>
+                      <div>• ข้อมูลถูกเก็บเป็นความลับ</div>
+                      <div>• สำรองข้อมูล 7 วันหลังจบงาน</div>
+                    </div>
+                    <button onClick={() => setShowCustomerBanner(false)} style={{ background: 'transparent', border: 'none', color: '#84b2bc', cursor: 'pointer' }}>✕</button>
                   </div>
                 </div>
               )}
             </div>
           )}
         </div>
-        
-        {/* Context Menu: Only show if in monitoring view */}
-        {currentAppView === 'monitoring' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            {userRole === 'admin' ? (
-              <div style={{ padding: '0 1.5rem 1rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-                <div className="machine-selector" style={{ border: 'none', padding: 0, margin: 0 }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                    Select Instrument / Machine
-                  </label>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <select 
-                      className="machine-dropdown" 
-                      value={currentMachineId} 
-                      onChange={handleMachineChange}
-                      style={{ margin: 0, flex: 1 }}
-                    >
-                      {machines.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                      <option value="ADD_NEW">+ Add New Machine...</option>
-                    </select>
-                    <button 
-                      onClick={renameMachine} 
-                      title="Rename selected machine"
-                      style={{ 
-                        background: 'rgba(255,255,255,0.05)', 
-                        border: '1px solid var(--border-color)', 
-                        borderRadius: '8px', 
-                        color: 'var(--text-primary)', 
-                        padding: '8px', 
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <Edit3 size={16} />
-                    </button>
-                    <button 
-                      onClick={deleteMachine} 
-                      title="Delete selected machine"
-                      style={{ 
-                        background: 'rgba(239, 68, 68, 0.1)', 
-                        border: '1px solid rgba(239, 68, 68, 0.2)', 
-                        borderRadius: '8px', 
-                        color: 'var(--accent-red)', 
-                        padding: '8px', 
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-                <button className="new-job-btn" onClick={createNewJob}>
-                  <FolderPlus size={18} />
-                  New Session
-                </button>
-              </div>
-            ) : (
-              // Customer Read-Only Machine/Session Card
-              <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>เครื่องมือที่ใช้ (Instrument)</span>
-                <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{currentMachine?.name}</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.5rem' }}>เซสชันการทดสอบ (Session)</span>
-                <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{currentJob?.name}</span>
-              </div>
-            )}
-            
-            {userRole === 'admin' && (
-              <div className="job-list">
-                {jobsForMachine.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-                    No sessions. Create one above.
-                  </div>
-                ) : (
-                  jobsForMachine.map((job) => (
-                    <div 
-                      key={job.id} 
-                      className={`job-item ${job.id === currentJobId ? 'active' : ''}`}
-                      onClick={() => {
-                          setCurrentJobId(job.id);
-                        }}
-                    >
-                      <div className="job-name">{job.name}</div>
-                      <div className="job-date">{job.createdAt}</div>
-                      
-                      {/* Copy code control for Admins */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.5rem' }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                          Code: <code style={{ color: 'var(--accent-blue)', background: 'rgba(59, 130, 246, 0.1)', padding: '2px 4px', borderRadius: '4px', cursor: 'pointer' }} onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(job.id);
-                            alert(`คัดลอกรหัสงานเรียบร้อย: ${job.id}`);
-                          }} title="Click to copy Job ID">
-                            {job.id.substring(0, 10)}...
-                          </code>
-                        </span>
-                        <button className="delete-job-btn" style={{ margin: 0 }} onClick={(e) => deleteJob(job.id, e)} title="Delete Session">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Logout Button */}
-        <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+        {/* Footer */}
+        <div className="sidebar-footer">
           <button 
+            className="sidebar-logout-btn"
             onClick={() => {
               if (window.confirm("ยืนยันการออกจากระบบ?")) {
                 setUserRole(null);
                 setActiveCustomerJobId(null);
+                setIsMobileMenuOpen(false);
               }
-            }} 
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              borderRadius: '8px', 
-              border: '1px solid rgba(239, 68, 68, 0.2)', 
-              background: 'rgba(239, 68, 68, 0.1)', 
-              color: 'var(--accent-red)', 
-              fontWeight: 600, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              transition: 'all 0.2s'
             }}
           >
-            ออกจากระบบ (Logout)
+            <LogOut size={16} />
+            Logout
           </button>
         </div>
       </aside>
@@ -1275,7 +1351,7 @@ function App() {
             {currentJob && userRole === 'admin' && (
               /* Manual Input Form */
               <div className="glass-panel form-container">
-                <h2 className="form-title">Manual Data Entry (กรอกค่าทดสอบของ {currentMachine?.name || 'เครื่องมือ'})</h2>
+                <h2 className="form-title">Manual Data Entry (Record Data {currentMachine?.name || 'เครื่องมือ'})</h2>
                 <form onSubmit={handleManualSubmit} className="data-form">
                   <div className="form-group-container">
                     <div className="form-group">
@@ -1675,7 +1751,7 @@ function App() {
                               <td style={{ textAlign: 'center' }}>
                                 <button 
                                   className="delete-row-btn" 
-                                  onClick={() => deleteDataPoint(index)}
+                                  onClick={() => deleteDataPoint(chartData.indexOf(row))}
                                   title="Delete this record"
                                   style={{ margin: '0 auto' }}
                                 >
