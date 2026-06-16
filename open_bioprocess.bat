@@ -1,4 +1,13 @@
 @echo off
-REM Open the app in the default browser using the friendly hostname
-REM Make sure you have added "127.0.0.1 bioprocess.local" to your hosts file
+title Bioprocess Logging System
+echo Starting server and launching app...
+echo --------------------------------------------------
+echo *** Please keep this window open while using the application. ***
+echo --------------------------------------------------
+echo.
+
+REM Open the web browser
 start "" "http://bioprocess.local:5173/"
+
+REM Run the dev server
+npm run dev

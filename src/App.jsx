@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
@@ -7,18 +8,67 @@ import {
   Download, LayoutDashboard, LineChart as ChartIcon, FolderPlus, Trash2, FolderOpen,
   Table as TableIcon, Users, Activity as ActivityIcon, Edit3,
   ChevronDown, ChevronUp, ChevronRight, Settings, LogOut, Cpu, Database, Folder,
-  Menu, X
+  Menu, X, Check
 } from 'lucide-react';
 import './index.css';
 import './form.css';
 import './tabs.css';
 import './table.css';
 
+const getElapsedHours = (job, dataPointTimestamp) => {
+  if (!job || !dataPointTimestamp) return 0;
+  
+  let startTimeMs = null;
+  
+  // Find the earliest timestamp among all data points in this job
+  if (job.data && job.data.length > 0) {
+    let minTimeMs = Infinity;
+    job.data.forEach(row => {
+      if (row.timestamp) {
+        const t = new Date(row.timestamp).getTime();
+        if (!isNaN(t) && t < minTimeMs) {
+          minTimeMs = t;
+        }
+      }
+    });
+    if (minTimeMs !== Infinity) {
+      startTimeMs = minTimeMs;
+    }
+  }
+  
+  // Fallback to Job ID or Job creation time if no data points have valid timestamps
+  if (!startTimeMs) {
+    if (job.id && typeof job.id === 'string' && job.id.startsWith('job-')) {
+      const idNum = parseInt(job.id.replace('job-', ''), 10);
+      if (!isNaN(idNum)) {
+        startTimeMs = idNum;
+      }
+    }
+    if (!startTimeMs && job.createdAt) {
+      const d = new Date(job.createdAt);
+      if (!isNaN(d.getTime())) {
+        startTimeMs = d.getTime();
+      }
+    }
+  }
+  
+  if (!startTimeMs) return 0;
+  
+  const recordTimeMs = new Date(dataPointTimestamp).getTime();
+  if (isNaN(recordTimeMs)) return 0;
+  
+  const diffMs = recordTimeMs - startTimeMs;
+  const hours = diffMs / (1000 * 60 * 60);
+  return Math.max(0, parseFloat(hours.toFixed(1)));
+};
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
+    const rowData = payload[0].payload;
+    const hrText = rowData && rowData.cultureHour !== undefined ? ` (ชั่วโมงที่ ${rowData.cultureHour})` : '';
     return (
       <div className="custom-tooltip">
-        <p className="custom-tooltip-label">{label}</p>
+        <p className="custom-tooltip-label">{label}{hrText}</p>
         {payload.map((entry, index) => (
           <p key={index} style={{ color: entry.color, margin: 0, fontSize: '14px', fontWeight: 600 }}>
             {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value || '-'}
@@ -58,10 +108,10 @@ function App() {
   };
   // Authentication State
   const [userRole, setUserRole] = useState(() => {
-    return sessionStorage.getItem('bioprocess-role') || null; // 'admin' | 'customer' | null
+    return localStorage.getItem('bioprocess-role') || null; // 'admin' | 'customer' | null
   });
   const [activeCustomerJobId, setActiveCustomerJobId] = useState(() => {
-    return sessionStorage.getItem('bioprocess-customer-job-id') || null;
+    return localStorage.getItem('bioprocess-customer-job-id') || null;
   });
 
   // PWA Install Prompt State
@@ -94,17 +144,17 @@ function App() {
 
   useEffect(() => {
     if (userRole) {
-      sessionStorage.setItem('bioprocess-role', userRole);
+      localStorage.setItem('bioprocess-role', userRole);
     } else {
-      sessionStorage.removeItem('bioprocess-role');
+      localStorage.removeItem('bioprocess-role');
     }
   }, [userRole]);
 
   useEffect(() => {
     if (activeCustomerJobId) {
-      sessionStorage.setItem('bioprocess-customer-job-id', activeCustomerJobId);
+      localStorage.setItem('bioprocess-customer-job-id', activeCustomerJobId);
     } else {
-      sessionStorage.removeItem('bioprocess-customer-job-id');
+      localStorage.removeItem('bioprocess-customer-job-id');
     }
   }, [activeCustomerJobId]);
 
@@ -133,6 +183,9 @@ function App() {
     try { return localStorage.getItem('bioprocess-customer-notice-ack') === 'true'; } catch (e) { return false; }
   });
   const [showCustomerBanner, setShowCustomerBanner] = useState(false);
+  // Customer Login Warning Toast State
+  const [showCustomerToast, setShowCustomerToast] = useState(false);
+  const [isToastHiding, setIsToastHiding] = useState(false);
   // Replay recorded data (playback) state
   const [isReplay, setIsReplay] = useState(false);
   const [replayIndex, setReplayIndex] = useState(0);
@@ -145,8 +198,8 @@ function App() {
     agit_set: 200, agit_read: 200,
     air_set: 2.0, air_read: 2.0,
     remark: '',
-    date: '',
-    time: ''
+    date: new Date().toLocaleDateString('en-CA'),
+    time: toHHMM(new Date())
   });
 
   const [visibleParameters, setVisibleParameters] = useState({
@@ -162,6 +215,8 @@ function App() {
     machineId: '',
     email: ''
   });
+
+  const [selectedCustomerJobs, setSelectedCustomerJobs] = useState({});
 
   // Fetch Database from Backend Helper
   const fetchDB = async (shouldAutoSelect = false) => {
@@ -194,8 +249,52 @@ function App() {
     }
   };
 
+  const handleAutoCustomerLogin = async (jobCode) => {
+    try {
+      const res = await fetch('/api/db');
+      if (res.ok) {
+        const data = await res.json();
+        const targetJob = data.jobs.find(j => j.id === jobCode);
+        if (!targetJob) {
+          alert('ไม่พบรหัสงานนี้ในระบบ หรือ ลิงก์ไม่ถูกต้อง');
+          return;
+        }
+
+        // Expiry check
+        if (targetJob.expiresAt && new Date() > new Date(targetJob.expiresAt)) {
+          alert('สิทธิ์การเข้าใช้งานเซสชันนี้หมดอายุแล้ว');
+          return;
+        }
+
+        // Apply fresh DB
+        setMachines(data.machines);
+        setJobs(data.jobs);
+        setCustomers(data.customers);
+
+        const ack = localStorage.getItem('bioprocess-customer-notice-ack') === 'true';
+        if (ack) {
+          setActiveCustomerJobId(jobCode);
+          setUserRole('customer');
+          setCurrentAppView('monitoring');
+        } else {
+          setPendingJobCode(jobCode);
+          setShowCustomerNotice(true);
+        }
+      }
+    } catch (err) {
+      console.error("Error auto logging in customer:", err);
+    }
+  };
+
   useEffect(() => {
     fetchDB(true);
+
+    const params = new URLSearchParams(window.location.search);
+    const urlJobId = params.get('job');
+    if (urlJobId) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      handleAutoCustomerLogin(urlJobId);
+    }
   }, []);
 
   // Poll server for real-time synchronization across multiple users
@@ -205,6 +304,19 @@ function App() {
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Active Customer Session Expiry Check
+  useEffect(() => {
+    if (userRole === 'customer' && activeCustomerJobId && jobs.length > 0) {
+      const activeJob = jobs.find(j => j.id === activeCustomerJobId);
+      if (activeJob && activeJob.expiresAt && new Date() > new Date(activeJob.expiresAt)) {
+        alert("ระยะเวลาการเข้าใช้งานเซสชันนี้หมดอายุแล้ว ระบบจะนำคุณออกจากระบบโดยอัตโนมัติ");
+        setUserRole(null);
+        setActiveCustomerJobId(null);
+        setCurrentAppView('monitoring');
+      }
+    }
+  }, [jobs, userRole, activeCustomerJobId]);
 
   // Save current active selections locally in browser
   useEffect(() => {
@@ -247,8 +359,10 @@ function App() {
   const currentJobData = currentJob?.data || [];
   // Choose which data set to render: live/full stored data or replayed slice
   const displayData = isReplay ? replayVisibleData : currentJobData;
-  const chartData = displayData.map(row => ({
+  const chartData = displayData.map((row, idx) => ({
     ...row,
+    originalIndex: idx,
+    cultureHour: getElapsedHours(currentJob, row.timestamp),
     temp_read: row.temp_read !== undefined ? row.temp_read : row.temp,
     temp_set: row.temp_set !== undefined ? row.temp_set : row.temp,
     ph_read: row.ph_read !== undefined ? row.ph_read : row.ph,
@@ -260,7 +374,11 @@ function App() {
     air_read: row.air_read !== undefined ? row.air_read : row.air,
     air_set: row.air_set !== undefined ? row.air_set : row.air,
     remark: row.remark !== undefined ? row.remark : ''
-  }));
+  })).sort((a, b) => {
+    const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return aTime - bTime;
+  });
   // Sorting state for table
   const [sortField, setSortField] = useState('timestamp'); // default sort by timestamp
   const [sortAsc, setSortAsc] = useState(false);
@@ -277,19 +395,33 @@ function App() {
   const getSortedRows = () => {
     const rows = [...chartData];
     rows.sort((a, b) => {
-      const aVal = a[sortField] || a.time || '';
-      const bVal = b[sortField] || b.time || '';
-      const aDate = new Date(aVal);
-      const bDate = new Date(bVal);
-      if (!isNaN(aDate.getTime()) && !isNaN(bDate.getTime())) {
-        return sortAsc ? aDate - bDate : bDate - aDate;
+      if (sortField === 'date' || sortField === 'time' || sortField === 'timestamp' || sortField === 'cultureHour') {
+        const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return sortAsc ? aTime - bTime : bTime - aTime;
       }
-      // fallback string compare
+      const aVal = a[sortField] !== undefined ? a[sortField] : '';
+      const bVal = b[sortField] !== undefined ? b[sortField] : '';
       if (aVal < bVal) return sortAsc ? -1 : 1;
       if (aVal > bVal) return sortAsc ? 1 : -1;
       return 0;
     });
     return rows;
+  };
+  const getEditingRowCultureHour = () => {
+    if (!editingRowData) return 0;
+    const { date, time } = editingRowData;
+    if (date && time) {
+      const dt = new Date(`${date}T${time}`);
+      if (!isNaN(dt.getTime())) {
+        return getElapsedHours(currentJob, dt.toISOString());
+      }
+      const dt2 = new Date(`${date} ${time}`);
+      if (!isNaN(dt2.getTime())) {
+        return getElapsedHours(currentJob, dt2.toISOString());
+      }
+    }
+    return getElapsedHours(currentJob, editingRowData.timestamp);
   };
   const lastDataPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null;
 
@@ -320,6 +452,94 @@ function App() {
     }
     return undefined;
   }, [userRole, activeCustomerJobId]);
+
+  // Customer Warning Toast Effect
+  useEffect(() => {
+    if (userRole === 'customer') {
+      setShowCustomerToast(true);
+      setIsToastHiding(false);
+      
+      const hideTimer = setTimeout(() => {
+        setIsToastHiding(true);
+      }, 14400);
+
+      const closeTimer = setTimeout(() => {
+        setShowCustomerToast(false);
+        setIsToastHiding(false);
+      }, 15000);
+
+      return () => {
+        clearTimeout(hideTimer);
+        clearTimeout(closeTimer);
+      };
+    } else {
+      setShowCustomerToast(false);
+      setIsToastHiding(false);
+    }
+  }, [userRole]);
+
+  const dismissCustomerToast = () => {
+    setIsToastHiding(true);
+    setTimeout(() => {
+      setShowCustomerToast(false);
+      setIsToastHiding(false);
+    }, 600);
+  };
+
+  const handleCopyShareLink = async (job) => {
+    let currentExpiryText = "ไม่มีวันหมดอายุ";
+    if (job.expiresAt) {
+      const expDate = new Date(job.expiresAt);
+      if (expDate > new Date()) {
+        currentExpiryText = `หมดอายุวันที่ ${expDate.toLocaleString('th-TH')}`;
+      } else {
+        currentExpiryText = `หมดอายุแล้วเมื่อ ${expDate.toLocaleString('th-TH')}`;
+      }
+    }
+
+    const inputHours = prompt(
+      `ระบุระยะเวลาที่ลูกค้าสามารถเข้าใช้งานลิงก์นี้ได้ (เป็นชั่วโมง)\n\n• ป้อนตัวเลข เช่น 24 (สำหรับ 1 วัน), 168 (สำหรับ 1 สัปดาห์)\n• เว้นว่าง หรือ ป้อน 0 เพื่อไม่จำกัดระยะเวลาการใช้งาน\n\nสถานะหมดอายุปัจจุบัน: ${currentExpiryText}`,
+      ""
+    );
+
+    if (inputHours === null) return; // User clicked Cancel
+
+    let expiresAt = null;
+    const hours = parseFloat(inputHours);
+
+    if (!isNaN(hours) && hours > 0) {
+      expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    }
+
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/expiry`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresAt })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        applyDBUpdate(data);
+
+        // Copy direct link to clipboard
+        const loginUrl = `${window.location.origin}/?job=${job.id}`;
+        await navigator.clipboard.writeText(loginUrl);
+
+        if (expiresAt) {
+          const expDate = new Date(expiresAt);
+          alert(`คัดลอกลิงก์สำหรับลูกค้าเข้าใช้งานเรียบร้อยแล้ว!\n\nลิงก์: ${loginUrl}\n\n⚠️ ลิงก์นี้จะหมดอายุวันที่: ${expDate.toLocaleString('th-TH')}`);
+        } else {
+          alert(`คัดลอกลิงก์สำหรับลูกค้าเข้าใช้งานเรียบร้อยแล้ว!\n\nลิงก์: ${loginUrl}\n\n(ลิงก์นี้ไม่มีวันหมดอายุ)`);
+        }
+      } else {
+        alert("ไม่สามารถกำหนดเวลาหมดอายุได้ กรุณาลองใหม่อีกครั้ง");
+      }
+    } catch (err) {
+      console.error("Error setting session expiry:", err);
+      alert("เกิดข้อผิดพลาดในการตั้งค่าเวลาหมดอายุ");
+    }
+  };
 
   // Reset replay when job changes or jobs list updates
   useEffect(() => {
@@ -362,8 +582,8 @@ function App() {
         air_set: lastDataPoint.air_set,
         air_read: lastDataPoint.air_read,
         remark: '',
-        date: lastDateValid ? lastDate.toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
-        time: toHHMM(lastDataPoint.time) || (lastDateValid ? toHHMM(lastDate) : toHHMM(new Date()))
+        date: new Date().toLocaleDateString('en-CA'),
+        time: toHHMM(new Date())
       });
     } else {
       setFormData({
@@ -576,6 +796,63 @@ function App() {
     }
   };
 
+  // Row Editing States
+  const [editingRowIndex, setEditingRowIndex] = useState(null);
+  const [editingRowData, setEditingRowData] = useState(null);
+
+  const startEditRow = (index, row) => {
+    setEditingRowIndex(index);
+    setEditingRowData({
+      timestamp: row.timestamp || new Date().toISOString(),
+      date: row.date || (row.timestamp ? new Date(row.timestamp).toISOString().slice(0, 10) : ''),
+      time: row.time || (row.timestamp ? new Date(row.timestamp).toTimeString().slice(0, 5) : ''),
+      temp_set: row.temp_set !== undefined ? row.temp_set : 0,
+      temp_read: row.temp_read !== undefined ? row.temp_read : 0,
+      ph_set: row.ph_set !== undefined ? row.ph_set : 0,
+      ph_read: row.ph_read !== undefined ? row.ph_read : 0,
+      do_set: row.do_set !== undefined ? row.do_set : 0,
+      do_read: row.do_read !== undefined ? row.do_read : 0,
+      agit_set: row.agit_set !== undefined ? row.agit_set : 0,
+      agit_read: row.agit_read !== undefined ? row.agit_read : 0,
+      air_set: row.air_set !== undefined ? row.air_set : 0,
+      air_read: row.air_read !== undefined ? row.air_read : 0,
+      remark: row.remark !== undefined ? row.remark : ''
+    });
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditingRowData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const cancelEditRow = () => {
+    setEditingRowIndex(null);
+    setEditingRowData(null);
+  };
+
+  const saveEditRow = async () => {
+    if (editingRowIndex === null || !editingRowData) return;
+    try {
+      const res = await fetch(`/api/jobs/${currentJobId}/data/${editingRowIndex}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingRowData)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        applyDBUpdate(data);
+        cancelEditRow();
+      } else {
+        alert("Failed to save changes. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error saving edited row:", err);
+      alert("An error occurred while saving.");
+    }
+  };
+
   const clearAllData = async () => {
     if (window.confirm("Are you sure you want to delete ALL data in this session?")) {
       try {
@@ -603,8 +880,8 @@ function App() {
   const handleManualSubmit = (e) => {
     e.preventDefault();
     const now = new Date();
-    const curDate = now.toISOString().slice(0,10);
-    const curTime = toHHMM(now);
+    const inputDate = formData.date || now.toLocaleDateString('en-CA');
+    const inputTime = formData.time || toHHMM(now);
     addDataPoint(
       formData.temp_set, formData.temp_read,
       formData.ph_set, formData.ph_read,
@@ -612,11 +889,17 @@ function App() {
       formData.agit_set, formData.agit_read,
       formData.air_set, formData.air_read,
       formData.remark,
-      curTime,
-      curDate
+      inputTime,
+      inputDate
     );
-    // Reset remark field
-    setFormData(prev => ({ ...prev, remark: '' }));
+    // Reset remark and update date/time to now
+    const resetNow = new Date();
+    setFormData(prev => ({ 
+      ...prev, 
+      remark: '',
+      date: resetNow.toLocaleDateString('en-CA'),
+      time: toHHMM(resetNow)
+    }));
   };
 
   const addDataPoint = async (
@@ -712,7 +995,9 @@ function App() {
       return;
     }
     const headers = [
-      'Timestamp', 
+      'Date',
+      'Time',
+      'Culture Hour (Hr)',
       'Temp SV (C)', 'Temp PV (C)', 
       'pH SV', 'pH PV', 
       'DO SV (%)', 'DO PV (%)', 
@@ -723,7 +1008,9 @@ function App() {
     const csvRows = [headers.join(',')];
     const rowsToExport = getSortedRows().length > 0 ? getSortedRows() : currentJob.data;
     rowsToExport.forEach(row => {
-      const tstamp = row.timestamp || row.time || '';
+      const dateVal = row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0, 10)) : '');
+      const timeVal = row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0, 5)) : '');
+      const hrVal = row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(currentJob, row.timestamp);
       const t_s = row.temp_set !== undefined ? row.temp_set : row.temp;
       const t_r = row.temp_read !== undefined ? row.temp_read : row.temp;
       const p_s = row.ph_set !== undefined ? row.ph_set : row.ph;
@@ -737,7 +1024,9 @@ function App() {
       const rem = row.remark !== undefined ? row.remark : '';
 
       const values = [
-        `"${tstamp}"`, 
+        `"${dateVal}"`, 
+        `"${timeVal}"`, 
+        hrVal,
         t_s, t_r, 
         p_s, p_r, 
         d_s, d_r, 
@@ -748,7 +1037,8 @@ function App() {
       csvRows.push(values.join(','));
     });
     const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -757,6 +1047,57 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportToExcel = () => {
+    if (!currentJob || currentJob.data.length === 0) {
+      alert("No data to export!");
+      return;
+    }
+
+    const rowsToExport = getSortedRows().length > 0 ? getSortedRows() : currentJob.data;
+    
+    const sheetData = rowsToExport.map(row => {
+      return {
+        'Date': row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0, 10)) : ''),
+        'Time': row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0, 5)) : ''),
+        'Culture Hour (Hr)': row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(currentJob, row.timestamp),
+        'Temp SV (°C)': row.temp_set !== undefined ? row.temp_set : row.temp,
+        'Temp PV (°C)': row.temp_read !== undefined ? row.temp_read : row.temp,
+        'pH SV': row.ph_set !== undefined ? row.ph_set : row.ph,
+        'pH PV': row.ph_read !== undefined ? row.ph_read : row.ph,
+        'DO SV (%)': row.do_set !== undefined ? row.do_set : row.do,
+        'DO PV (%)': row.do_read !== undefined ? row.do_read : row.do,
+        'Agit SV (RPM)': row.agit_set !== undefined ? row.agit_set : row.agit,
+        'Agit PV (RPM)': row.agit_read !== undefined ? row.agit_read : row.agit,
+        'Air Flow SV (L/M)': row.air_set !== undefined ? row.air_set : row.air,
+        'Air Flow PV (L/M)': row.air_read !== undefined ? row.air_read : row.air,
+        'Remarks': row.remark !== undefined ? row.remark : ''
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(sheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Bioprocess Records");
+    
+    // Auto-fit column widths
+    const max_widths = [];
+    sheetData.forEach(row => {
+      Object.keys(row).forEach((key, colIndex) => {
+        const value = row[key] ? String(row[key]) : "";
+        const length = Math.max(value.length, key.length) + 2;
+        max_widths[colIndex] = Math.max(max_widths[colIndex] || 0, length);
+      });
+    });
+    worksheet['!cols'] = max_widths.map(w => ({ wch: w }));
+
+    const safeName = currentJob.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    XLSX.writeFile(workbook, `${safeName}_data.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    if (!currentJob) return;
+    window.print();
   };
 
   // Auto Simulation removed
@@ -773,13 +1114,23 @@ function App() {
             {/* Admin Login Block */}
             <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.3)' }}>
               <h3 style={{ marginBottom: '1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem' }}>🔐 สำหรับแอดมิน (Admin)</h3>
-              <form onSubmit={(e) => {
+              <form onSubmit={async (e) => {
                 e.preventDefault();
                 const password = e.target.adminPassword.value;
-                if (password === 'admin123') { // Simple default password
-                  setUserRole('admin');
-                } else {
-                  alert('รหัสผ่านไม่ถูกต้อง (รหัสเริ่มต้น: admin123)');
+                try {
+                  const res = await fetch('/api/settings/verify-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                  });
+                  if (res.ok) {
+                    setUserRole('admin');
+                  } else {
+                    alert('รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+                  }
+                } catch (err) {
+                  console.error('Error verifying password:', err);
+                  alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
                 }
               }} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <input 
@@ -808,6 +1159,11 @@ function App() {
                   const jobExists = data.jobs.find(j => j.id === jobCode);
                   if (!jobExists) {
                     alert('ไม่พบรหัสงานนี้ในระบบ กรุณาตรวจสอบรหัสอีกครั้ง');
+                    return;
+                  }
+
+                  if (jobExists.expiresAt && new Date() > new Date(jobExists.expiresAt)) {
+                    alert('สิทธิ์การเข้าใช้งานเซสชันนี้หมดอายุแล้ว');
                     return;
                   }
 
@@ -896,6 +1252,35 @@ function App() {
 
   return (
     <div className="app-layout">
+      {/* Customer Warning Toast Notification */}
+      {showCustomerToast && (
+        <div className={`login-toast-container ${isToastHiding ? 'hiding' : ''}`}>
+          <div className="login-toast">
+            <div className="login-toast-header">
+              <span>⚠️ แจ้งเตือนการใช้งานระบบ</span>
+              <button className="login-toast-close" onClick={dismissCustomerToast}>&times;</button>
+            </div>
+            <div className="login-toast-body">
+              <div className="login-toast-item">
+                <span className="login-toast-bullet">•</span>
+                <span>ระบบนี้จัดทำขึ้นเพื่อบันทึกและจัดเก็บข้อมูลสำหรับการปฏิบัติงานและการจัดทำรายงานเท่านั้น</span>
+              </div>
+              <div className="login-toast-item">
+                <span className="login-toast-bullet">•</span>
+                <span>ID และรหัสผ่านเป็นข้อมูลสำคัญ ห้ามเปิดเผยหรือแชร์ให้บุคคลที่ไม่เกี่ยวข้อง</span>
+              </div>
+              <div className="login-toast-item">
+                <span className="login-toast-bullet">•</span>
+                <span>สิทธิ์การเข้าใช้งานระบบถูกกำหนดเฉพาะผู้ได้รับอนุญาตเท่านั้น</span>
+              </div>
+              <div className="login-toast-item">
+                <span className="login-toast-bullet">•</span>
+                <span>ข้อมูลจะถูกสำรองไว้ 7 วัน นับจากวันที่บันทึกข้อมูลล่าสุด</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showCustomerNotice && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div style={{ width: 520, maxWidth: '95%', background: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: 12, padding: '1.25rem' }}>
@@ -992,6 +1377,9 @@ function App() {
         <div className="sidebar-menu">
           {userRole === 'admin' ? (
             <>
+              {/* Category: Monitoring */}
+              <div className="sidebar-menu-header">Monitoring</div>
+
               {/* Menu Dashboard */}
               <div 
                 className={`sidebar-menu-item ${currentAppView === 'monitoring' ? 'active' : ''}`}
@@ -1004,21 +1392,6 @@ function App() {
                   <LayoutDashboard size={18} />
                   Dashboard / Monitor
                 </span>
-              </div>
-
-              {/* Menu Customer Database */}
-              <div 
-                className={`sidebar-menu-item ${currentAppView === 'customers' ? 'active' : ''}`}
-                onClick={() => {
-                  setCurrentAppView('customers');
-                  setIsMobileMenuOpen(false);
-                }}
-              >
-                <span className="sidebar-menu-link">
-                  <Users size={18} />
-                  Customer Database
-                </span>
-                <span className="sidebar-badge">{customers.length}</span>
               </div>
 
               {/* Instrument Accordion */}
@@ -1120,17 +1493,29 @@ function App() {
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.7rem', color: '#688d96', marginTop: '2px' }}>
                             <span>{job.createdAt.split(',')[0]}</span>
-                            <span 
-                              style={{ color: '#00f0ff', cursor: 'pointer', background: 'rgba(0, 240, 255, 0.05)', padding: '0 4px', borderRadius: '3px' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(job.id);
-                                alert(`คัดลอกรหัสงานเรียบร้อย: ${job.id}`);
-                              }}
-                              title="Click to copy Code"
-                            >
-                              Code: {job.id.substring(4, 9)}..
-                            </span>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <span 
+                                style={{ color: '#10b981', cursor: 'pointer', background: 'rgba(16, 185, 129, 0.08)', padding: '0 4px', borderRadius: '3px', fontWeight: 600 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyShareLink(job);
+                                }}
+                                title="Click to Copy Direct Login Link for Customer"
+                              >
+                                ลิงก์แชร์
+                              </span>
+                              <span 
+                                style={{ color: '#00f0ff', cursor: 'pointer', background: 'rgba(0, 240, 255, 0.05)', padding: '0 4px', borderRadius: '3px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(job.id);
+                                  alert(`คัดลอกรหัสงานเรียบร้อย: ${job.id}`);
+                                }}
+                                title="Click to copy Code"
+                              >
+                                Code: {job.id.substring(4, 9)}..
+                              </span>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1148,6 +1533,38 @@ function App() {
                   )}
                 </>
               )}
+
+              {/* Category: Management */}
+              <div className="sidebar-menu-header">Management</div>
+
+              {/* Menu Customer Database */}
+              <div 
+                className={`sidebar-menu-item ${currentAppView === 'customers' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('customers');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <span className="sidebar-menu-link">
+                  <Users size={18} />
+                  Customer Database
+                </span>
+                <span className="sidebar-badge">{customers.length}</span>
+              </div>
+
+              {/* Menu System Settings */}
+              <div 
+                className={`sidebar-menu-item ${currentAppView === 'settings' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('settings');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <span className="sidebar-menu-link">
+                  <Settings size={18} />
+                  System Settings
+                </span>
+              </div>
             </>
           ) : (
             /* Customer Portal Navigation */
@@ -1204,6 +1621,13 @@ function App() {
 
       {/* MAIN CONTENT */}
       <main className="main-content">
+        {/* Print-only Header */}
+        <div className="print-only-header">
+          <h1>Bioprocess Data Report</h1>
+          <p><strong>Session Name:</strong> {currentJob?.name || '-'}</p>
+          <p><strong>Instrument / Machine:</strong> {currentMachine?.name || '-'}</p>
+          <p><strong>Date Generated:</strong> {new Date().toLocaleString('th-TH')}</p>
+        </div>
         {currentAppView === 'customers' ? (
           /* CUSTOMER DATA VIEW */
           <div className="customers-view">
@@ -1213,7 +1637,7 @@ function App() {
 
             <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
               <h2 className="form-title">Add New Customer</h2>
-              <form onSubmit={handleAddCustomer} className="data-form" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+              <form onSubmit={handleAddCustomer} className="customer-add-form">
                 <div className="form-group" style={{ flex: 2 }}>
                   <label>Company / Customer Name</label>
                   <input
@@ -1270,6 +1694,7 @@ function App() {
                       <th>Company / Customer Name</th>
                       <th>Email</th>
                       <th>Machine Assigned</th>
+                      <th>Session & Share Link</th>
                       <th>Date Added</th>
                       <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
                     </tr>
@@ -1277,7 +1702,7 @@ function App() {
                   <tbody>
                     {customers.length === 0 ? (
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                           No customers recorded yet.
                         </td>
                       </tr>
@@ -1290,6 +1715,52 @@ function App() {
                             <span style={{ background: 'rgba(59, 130, 246, 0.2)', color: 'var(--accent-blue)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem' }}>
                               {getMachineName(c.machineId)}
                             </span>
+                          </td>
+                          <td>
+                            {(() => {
+                              const custJobs = jobs.filter(j => j.machineId === c.machineId);
+                              if (custJobs.length === 0) {
+                                return <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>ไม่มีเซสชันในเครื่องนี้</span>;
+                              }
+                              const selectedJobId = selectedCustomerJobs[c.id] || custJobs[0].id;
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <select
+                                    value={selectedJobId}
+                                    onChange={(e) => setSelectedCustomerJobs(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                    className="machine-dropdown"
+                                    style={{ padding: '4px 8px', height: '32px', fontSize: '0.85rem', width: 'auto', display: 'inline-block', minWidth: '120px', backgroundImage: 'none' }}
+                                  >
+                                    {custJobs.map(j => (
+                                      <option key={j.id} value={j.id}>{j.name}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    className="submit-btn"
+                                    style={{
+                                      padding: '4px 10px',
+                                      height: '32px',
+                                      fontSize: '0.85rem',
+                                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      color: 'white',
+                                      cursor: 'pointer',
+                                      fontWeight: 600,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                    onClick={() => {
+                                      const targetJob = custJobs.find(j => j.id === selectedJobId) || custJobs[0];
+                                      handleCopyShareLink(targetJob);
+                                    }}
+                                  >
+                                    ลิงก์แชร์
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td style={{ color: 'var(--text-secondary)' }}>{c.createdAt}</td>
                           <td style={{ textAlign: 'center' }}>
@@ -1307,6 +1778,89 @@ function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        ) : currentAppView === 'settings' ? (
+          /* SYSTEM SETTINGS VIEW */
+          <div className="settings-view">
+            <header className="dashboard-header">
+              <h2>System Settings</h2>
+            </header>
+
+            <div className="glass-panel" style={{ padding: '2rem', maxWidth: '500px' }}>
+              <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Settings size={20} color="var(--accent-blue)" /> ตั้งค่ารหัสผ่านผู้ดูแลระบบ (Change Admin Password)
+              </h3>
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const currentPassword = e.target.currentPassword.value;
+                const newPassword = e.target.newPassword.value;
+                const confirmPassword = e.target.confirmPassword.value;
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                  alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+                  return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                  alert('รหัสผ่านใหม่และยืนยันรหัสผ่านใหม่ไม่ตรงกัน');
+                  return;
+                }
+
+                try {
+                  const res = await fetch('/api/settings/update-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                  });
+                  const result = await res.json();
+                  if (res.ok) {
+                    alert('เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว');
+                    e.target.reset();
+                  } else {
+                    alert(`ผิดพลาด: ${result.error}`);
+                  }
+                } catch (err) {
+                  console.error('Error changing password:', err);
+                  alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อเปลี่ยนรหัสผ่านได้');
+                }
+              }} className="data-form" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                
+                <div className="form-group" style={{ width: '100%' }}>
+                  <label>รหัสผ่านปัจจุบัน (Current Password)</label>
+                  <input
+                    type="password"
+                    name="currentPassword"
+                    placeholder="ป้อนรหัสผ่านปัจจุบัน"
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', width: '100%' }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ width: '100%' }}>
+                  <label>รหัสผ่านใหม่ (New Password)</label>
+                  <input
+                    type="password"
+                    name="newPassword"
+                    placeholder="ป้อนรหัสผ่านใหม่"
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', width: '100%' }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ width: '100%' }}>
+                  <label>ยืนยันรหัสผ่านใหม่ (Confirm New Password)</label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    placeholder="ป้อนยืนยันรหัสผ่านใหม่"
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.5)', color: 'white', width: '100%' }}
+                  />
+                </div>
+
+                <button type="submit" className="submit-btn" style={{ width: '100%', height: '42px', marginTop: '0.5rem' }}>
+                  บันทึกการตั้งค่า (Update Password)
+                </button>
+              </form>
             </div>
           </div>
         ) : (
@@ -1340,12 +1894,12 @@ function App() {
                 )}
               </div>
 
-              <div className="header-controls">
+              <div className="header-controls" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                   className={`theme-toggle-btn`}
                   onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
                   title="Toggle theme"
-                  style={{ marginRight: '12px' }}
+                  style={{ margin: 0 }}
                 >
                   {theme === 'dark' ? '🌙' : '☀️'}
                 </button>
@@ -1365,12 +1919,18 @@ function App() {
                       }
                     }}
                     disabled={!currentJob || currentJobData.length === 0}
-                    style={{ marginRight: '8px' }}
+                    style={{ margin: 0 }}
                   >
                     {isReplay ? 'Replay ON' : 'Replay'}
                   </button>
                 )}
-                <button className="export-btn" onClick={exportToCSV} disabled={!currentJob}>
+                <button className="export-btn" onClick={exportToExcel} disabled={!currentJob} style={{ margin: 0 }}>
+                  <Download size={18} style={{ marginRight: '8px' }} /> Export Excel
+                </button>
+                <button className="export-btn" onClick={exportToPDF} disabled={!currentJob} style={{ margin: 0 }}>
+                  <Download size={18} style={{ marginRight: '8px' }} /> Export PDF
+                </button>
+                <button className="export-btn" onClick={exportToCSV} disabled={!currentJob} style={{ margin: 0 }}>
                   <Download size={18} style={{ marginRight: '8px' }} /> Export CSV
                 </button>
                 {/* Auto simulation removed */}
@@ -1388,11 +1948,11 @@ function App() {
                       <div className="form-inputs-row">
                         <div className="form-input-subgroup">
                           <span className="input-sublabel">ตั้งค่า (SV)</span>
-                          <input type="number" step="0.1" name="temp_set" value={formData.temp_set} onChange={handleInputChange} />
+                          <input type="number" step="0.01" name="temp_set" value={formData.temp_set} onChange={handleInputChange} />
                         </div>
                         <div className="form-input-subgroup">
                           <span className="input-sublabel">อ่านค่า (PV)</span>
-                          <input type="number" step="0.1" name="temp_read" value={formData.temp_read} onChange={handleInputChange} />
+                          <input type="number" step="0.01" name="temp_read" value={formData.temp_read} onChange={handleInputChange} />
                         </div>
                       </div>
                     </div>
@@ -1448,7 +2008,46 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    
+                    {/* Date and Time manual inputs */}
+                    <div className="form-group" style={{ minWidth: '180px' }}>
+                      <label>📅 DATE (วันที่บันทึก)</label>
+                      <input 
+                        type="date" 
+                        name="date" 
+                        value={formData.date} 
+                        onChange={handleInputChange}
+                        style={{ 
+                          width: '100%', 
+                          padding: '10px 14px', 
+                          borderRadius: '8px', 
+                          border: '1px solid var(--border-color)', 
+                          background: 'rgba(15, 23, 42, 0.5)', 
+                          color: 'white',
+                          fontFamily: 'inherit',
+                          fontSize: '0.95rem'
+                        }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ minWidth: '180px' }}>
+                      <label>⏰ TIME (เวลาที่บันทึก)</label>
+                      <input 
+                        type="time" 
+                        name="time" 
+                        value={formData.time} 
+                        onChange={handleInputChange}
+                        style={{ 
+                          width: '100%', 
+                          padding: '10px 14px', 
+                          borderRadius: '8px', 
+                          border: '1px solid var(--border-color)', 
+                          background: 'rgba(15, 23, 42, 0.5)', 
+                          color: 'white',
+                          fontFamily: 'inherit',
+                          fontSize: '0.95rem'
+                        }}
+                      />
+                    </div>
+
                     {/* Remarks/Notes full-width input */}
                     <div className="form-group" style={{ flex: '1 1 100%' }}>
                       <label>REMARKS / NOTES (บันทึกข้อความ)</label>
@@ -1501,10 +2100,10 @@ function App() {
                       <div className="metric-title">Temperature</div>
                       <div className="metric-value-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div className="metric-value" style={{ color: 'var(--accent-red)', fontSize: '2.2rem', lineHeight: 1.1 }}>
-                          {typeof (lastDataPoint.temp_read !== undefined ? lastDataPoint.temp_read : lastDataPoint?.temp) === 'number' ? ((lastDataPoint.temp_read !== undefined ? lastDataPoint.temp_read : lastDataPoint?.temp) || 0).toFixed(1) : '-'}<span className="metric-unit">°C</span>
+                          {typeof (lastDataPoint.temp_read !== undefined ? lastDataPoint.temp_read : lastDataPoint?.temp) === 'number' ? ((lastDataPoint.temp_read !== undefined ? lastDataPoint.temp_read : lastDataPoint?.temp) || 0).toFixed(2) : '-'}<span className="metric-unit">°C</span>
                         </div>
                         <div className="metric-value-sv" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                          SV (Set): {typeof (lastDataPoint.temp_set !== undefined ? lastDataPoint.temp_set : lastDataPoint?.temp) === 'number' ? ((lastDataPoint.temp_set !== undefined ? lastDataPoint.temp_set : lastDataPoint?.temp) || 0).toFixed(1) : '-'}°C
+                          SV (Set): {typeof (lastDataPoint.temp_set !== undefined ? lastDataPoint.temp_set : lastDataPoint?.temp) === 'number' ? ((lastDataPoint.temp_set !== undefined ? lastDataPoint.temp_set : lastDataPoint?.temp) || 0).toFixed(2) : '-'}°C
                         </div>
                       </div>
                     </div>
@@ -1568,7 +2167,7 @@ function App() {
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                           <XAxis dataKey="time" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(2) : val} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line type="monotone" dataKey="temp_read" name="TEMP PV (Read)" stroke="var(--accent-red)" strokeWidth={3} dot={true} activeDot={{ r: 8 }} />
@@ -1739,6 +2338,9 @@ function App() {
                           <th rowSpan="2" style={{ verticalAlign: 'middle', textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleSort('time')}>
                             Time {sortField === 'time' ? (sortAsc ? '▲' : '▼') : ''}
                           </th>
+                          <th rowSpan="2" style={{ verticalAlign: 'middle', textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleSort('cultureHour')}>
+                            ชั่วโมงที่ {sortField === 'cultureHour' ? (sortAsc ? '▲' : '▼') : ''}
+                          </th>
                           <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-red)' }}>Temp (°C)</th>
                           <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-blue)' }}>pH</th>
                           <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-green)' }}>DO (%)</th>
@@ -1762,33 +2364,190 @@ function App() {
                       </thead>
                       <tbody>
                         {getSortedRows().map((row, index) => (
-                          <tr key={index}>
-                            <td style={{ textAlign: 'center' }}>{row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0,10)) : '')}</td>
-                            <td style={{ textAlign: 'center' }}>{row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0,5)) : '')}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.temp_set === 'number' ? row.temp_set.toFixed(1) : '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--accent-red)', fontWeight: 600 }}>{typeof row.temp_read === 'number' ? row.temp_read.toFixed(1) : '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.ph_set === 'number' ? row.ph_set.toFixed(2) : '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--accent-blue)', fontWeight: 600 }}>{typeof row.ph_read === 'number' ? row.ph_read.toFixed(2) : '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{row.do_set || '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--accent-green)', fontWeight: 600 }}>{row.do_read || '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{row.agit_set || '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--accent-yellow)', fontWeight: 600 }}>{row.agit_read || '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.air_set === 'number' ? row.air_set.toFixed(1) : '-'}</td>
-                            <td style={{ textAlign: 'center', color: 'var(--accent-purple)', fontWeight: 600 }}>{typeof row.air_read === 'number' ? row.air_read.toFixed(1) : '-'}</td>
-                            <td style={{ textAlign: 'left', padding: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{row.remark || '-'}</td>
-                            {userRole === 'admin' && (
-                              <td style={{ textAlign: 'center' }}>
-                                <button 
-                                  className="delete-row-btn" 
-                                  onClick={() => deleteDataPoint(chartData.indexOf(row))}
-                                  title="Delete this record"
-                                  style={{ margin: '0 auto' }}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                          editingRowIndex === row.originalIndex ? (
+                            <tr key={index} style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="date" 
+                                  value={editingRowData.date} 
+                                  onChange={(e) => handleEditChange('date', e.target.value)} 
+                                  style={{ padding: '6px 4px', borderRadius: '4px', border: '1px solid var(--accent-blue)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '115px' }}
+                                />
                               </td>
-                            )}
-                          </tr>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="time" 
+                                  value={editingRowData.time} 
+                                  onChange={(e) => handleEditChange('time', e.target.value)} 
+                                  style={{ padding: '6px 4px', borderRadius: '4px', border: '1px solid var(--accent-blue)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '85px' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px', color: 'var(--text-secondary)' }}>
+                                {getEditingRowCultureHour()} ชม.
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={editingRowData.temp_set} 
+                                  onChange={(e) => handleEditChange('temp_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={editingRowData.temp_read} 
+                                  onChange={(e) => handleEditChange('temp_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-red)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={editingRowData.ph_set} 
+                                  onChange={(e) => handleEditChange('ph_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={editingRowData.ph_read} 
+                                  onChange={(e) => handleEditChange('ph_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-blue)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="1" 
+                                  value={editingRowData.do_set} 
+                                  onChange={(e) => handleEditChange('do_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '40px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="1" 
+                                  value={editingRowData.do_read} 
+                                  onChange={(e) => handleEditChange('do_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '40px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="1" 
+                                  value={editingRowData.agit_set} 
+                                  onChange={(e) => handleEditChange('agit_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="1" 
+                                  value={editingRowData.agit_read} 
+                                  onChange={(e) => handleEditChange('agit_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-yellow)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={editingRowData.air_set} 
+                                  onChange={(e) => handleEditChange('air_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={editingRowData.air_read} 
+                                  onChange={(e) => handleEditChange('air_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-purple)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'left', padding: '6px' }}>
+                                <input 
+                                  type="text" 
+                                  value={editingRowData.remark} 
+                                  onChange={(e) => handleEditChange('remark', e.target.value)} 
+                                  style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '100%', minWidth: '100px' }}
+                                />
+                              </td>
+                              {userRole === 'admin' && (
+                                <td style={{ textAlign: 'center', padding: '6px' }}>
+                                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button 
+                                      className="save-row-btn" 
+                                      onClick={saveEditRow}
+                                      title="Save changes"
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--accent-green)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                    >
+                                      <Check size={16} />
+                                    </button>
+                                    <button 
+                                      className="cancel-row-btn" 
+                                      onClick={cancelEditRow}
+                                      title="Cancel editing"
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ) : (
+                            <tr key={index}>
+                              <td style={{ textAlign: 'center' }}>{row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0,10)) : '')}</td>
+                              <td style={{ textAlign: 'center' }}>{row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0,5)) : '')}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{row.cultureHour !== undefined ? `${row.cultureHour} ชม.` : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.temp_set === 'number' ? row.temp_set.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-red)', fontWeight: 600 }}>{typeof row.temp_read === 'number' ? row.temp_read.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.ph_set === 'number' ? row.ph_set.toFixed(2) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-blue)', fontWeight: 600 }}>{typeof row.ph_read === 'number' ? row.ph_read.toFixed(2) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{row.do_set || '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-green)', fontWeight: 600 }}>{row.do_read || '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{row.agit_set || '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-yellow)', fontWeight: 600 }}>{row.agit_read || '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.air_set === 'number' ? row.air_set.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-purple)', fontWeight: 600 }}>{typeof row.air_read === 'number' ? row.air_read.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'left', padding: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{row.remark || '-'}</td>
+                              {userRole === 'admin' && (
+                                <td style={{ textAlign: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                                    <button 
+                                      className="edit-row-btn" 
+                                      onClick={() => startEditRow(row.originalIndex, row)}
+                                      title="Edit this record"
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.7 }}
+                                      onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                                      onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
+                                    >
+                                      <Edit3 size={16} />
+                                    </button>
+                                    <button 
+                                      className="delete-row-btn" 
+                                      onClick={() => deleteDataPoint(row.originalIndex)}
+                                      title="Delete this record"
+                                      style={{ margin: '0' }}
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          )
                         ))}
                       </tbody>
                     </table>

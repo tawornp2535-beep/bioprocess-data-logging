@@ -196,11 +196,83 @@ const getDB = async () => {
 };
 
 // ──────────────────────────────────────────────────────────
+// Settings Helpers
+// ──────────────────────────────────────────────────────────
+const SETTINGS_COL = 'settings';
+
+const getSettings = async () => {
+  if (isCloud) {
+    try {
+      const doc = await db.collection(SETTINGS_COL).doc('system').get();
+      if (doc.exists) {
+        return doc.data();
+      }
+    } catch (e) {
+      console.error('Error reading settings from Firestore:', e);
+    }
+  }
+  
+  const localDB = readLocalDB();
+  if (!localDB.settings) {
+    localDB.settings = { adminPassword: 'admin123' };
+    writeLocalDB(localDB);
+  }
+  
+  if (isCloud) {
+    try {
+      await db.collection(SETTINGS_COL).doc('system').set(localDB.settings);
+    } catch (e) {
+      console.error('Failed to seed settings in Firestore:', e);
+    }
+  }
+  return localDB.settings;
+};
+
+const saveSettings = async (settings) => {
+  if (isCloud) {
+    try {
+      await db.collection(SETTINGS_COL).doc('system').set(settings);
+    } catch (e) {
+      console.error('Error writing settings to Firestore:', e);
+    }
+  }
+  const localDB = readLocalDB();
+  localDB.settings = settings;
+  writeLocalDB(localDB);
+};
+
+// ──────────────────────────────────────────────────────────
 // API Routes
 // ──────────────────────────────────────────────────────────
 
 app.get('/api/db', async (req, res) => {
   res.json(await getDB());
+});
+
+// ── Settings ─────────────────────────────────────────────
+
+app.post('/api/settings/verify-password', async (req, res) => {
+  const { password } = req.body;
+  const settings = await getSettings();
+  if (password === settings.adminPassword) {
+    return res.json({ success: true });
+  } else {
+    return res.status(400).json({ error: 'Incorrect password' });
+  }
+});
+
+app.post('/api/settings/update-password', async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const settings = await getSettings();
+  if (currentPassword !== settings.adminPassword) {
+    return res.status(400).json({ error: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' });
+  }
+  if (!newPassword || newPassword.trim() === '') {
+    return res.status(400).json({ error: 'รหัสผ่านใหม่ห้ามเป็นค่าว่าง' });
+  }
+  settings.adminPassword = newPassword.trim();
+  await saveSettings(settings);
+  res.json({ success: true });
 });
 
 // ── Machines ─────────────────────────────────────────────
@@ -331,6 +403,28 @@ app.delete('/api/jobs/:id', async (req, res) => {
   res.json(await getDB());
 });
 
+app.put('/api/jobs/:id/expiry', async (req, res) => {
+  const { id } = req.params;
+  const { expiresAt } = req.body;
+
+  if (isCloud) {
+    try {
+      await db.collection(JOBS_COL).doc(id).update({ expiresAt });
+    } catch (e) {
+      console.error('Firestore error updating session expiry:', e);
+    }
+  } else {
+    const localDB = readLocalDB();
+    const job = localDB.jobs.find(j => j.id === id);
+    if (job) {
+      job.expiresAt = expiresAt;
+      writeLocalDB(localDB);
+    }
+  }
+
+  res.json(await getDB());
+});
+
 // ── Data Points ──────────────────────────────────────────
 
 app.post('/api/jobs/:id/data', async (req, res) => {
@@ -422,6 +516,57 @@ app.delete('/api/jobs/:id/data/:index', async (req, res) => {
     const job = localDB.jobs.find(j => j.id === id);
     if (job && idx < job.data.length) {
       job.data.splice(idx, 1);
+      writeLocalDB(localDB);
+    }
+  }
+
+  res.json(await getDB());
+});
+
+app.put('/api/jobs/:id/data/:index', async (req, res) => {
+  const { id, index } = req.params;
+  const idx = parseInt(index, 10);
+  const updatedPoint = req.body;
+
+  if (isNaN(idx) || idx < 0) {
+    return res.status(400).json({ error: 'Invalid index' });
+  }
+
+  const cleanPoint = {
+    timestamp: normalizeDateTime(updatedPoint.date, updatedPoint.time) || updatedPoint.timestamp || new Date().toISOString(),
+    date: updatedPoint.date || new Date().toISOString().slice(0, 10),
+    time: normalizeTimeHHMM(updatedPoint.time) || normalizeTimeHHMM(new Date()),
+    temp_set: parseFloat(updatedPoint.temp_set) || 0,
+    temp_read: parseFloat(updatedPoint.temp_read) || 0,
+    ph_set: parseFloat(updatedPoint.ph_set) || 0,
+    ph_read: parseFloat(updatedPoint.ph_read) || 0,
+    do_set: parseFloat(updatedPoint.do_set) || 0,
+    do_read: parseFloat(updatedPoint.do_read) || 0,
+    agit_set: parseFloat(updatedPoint.agit_set) || 0,
+    agit_read: parseFloat(updatedPoint.agit_read) || 0,
+    air_set: parseFloat(updatedPoint.air_set) || 0,
+    air_read: parseFloat(updatedPoint.air_read) || 0,
+    remark: updatedPoint.remark || ''
+  };
+
+  if (isCloud) {
+    try {
+      const jobDoc = await db.collection(JOBS_COL).doc(id).get();
+      if (jobDoc.exists) {
+        const jobData = jobDoc.data();
+        if (jobData.data && idx < jobData.data.length) {
+          jobData.data[idx] = cleanPoint;
+          await db.collection(JOBS_COL).doc(id).update({ data: jobData.data });
+        }
+      }
+    } catch (e) {
+      console.error('Firestore error updating data point:', e);
+    }
+  } else {
+    const localDB = readLocalDB();
+    const job = localDB.jobs.find(j => j.id === id);
+    if (job && idx < job.data.length) {
+      job.data[idx] = cleanPoint;
       writeLocalDB(localDB);
     }
   }

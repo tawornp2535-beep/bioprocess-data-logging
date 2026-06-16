@@ -573,9 +573,315 @@ body {
   .mobile-close-btn {
     display: flex !important;
   }
+
+  /* Mobile Customer Database Form */
+  .customer-add-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .customer-add-form .form-group {
+    flex: 1 1 auto !important;
+    width: 100%;
+  }
+  .customer-add-form input,
+  .customer-add-form select,
+  .customer-add-form button {
+    width: 100% !important;
+  }
+
+  /* Nav tabs wrap on mobile */
+  .nav-tabs {
+    flex-wrap: wrap;
+  }
+  .nav-tab {
+    flex: 1 1 auto;
+    justify-content: center;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* Header controls wrap on mobile */
+  .header-controls {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .header-controls button, 
+  .header-controls .export-btn, 
+  .header-controls .toggle-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    font-size: 0.85rem;
+    padding: 8px 12px;
+    margin: 0 !important;
+  }
+}
+
+/* Customer Database Form */
+.customer-add-form {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  width: 100%;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Sidebar Menu Reorganization Headers */
+.sidebar-menu-header {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: #688d96;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 1rem 1.25rem 0.5rem 1.25rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.sidebar-menu-header:first-of-type {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0.5rem;
+}
+
+/* Customer Login Toast Notification */
+.login-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 10000;
+  max-width: 420px;
+  width: calc(100vw - 48px);
+  animation: slideInRight 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+.login-toast {
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-left: 4px solid var(--accent-yellow);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.login-toast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  color: var(--accent-yellow);
+  font-size: 1rem;
+}
+
+.login-toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.login-toast-close:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.login-toast-body {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.login-toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.login-toast-bullet {
+  color: var(--accent-yellow);
+  font-weight: bold;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOutUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+}
+
+.login-toast-container.hiding {
+  animation: fadeOutUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (max-width: 480px) {
+  .login-toast-container {
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
+}
+
+/* Print-Only CSS Styles */
+.print-only-header {
+  display: none;
+}
+
+@media print {
+  /* Set light backgrounds for printing */
+  :root, body {
+    --bg-color: #ffffff !important;
+    --text-primary: #000000 !important;
+    --text-secondary: #334155 !important;
+    --border-color: #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Reset layout constraints for printing */
+  .app-layout {
+    display: block !important;
+    height: auto !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* Hide navigation, sidebar, forms, toasts, headers controls */
+  .sidebar,
+  .mobile-topbar,
+  .nav-tabs,
+  .header-controls,
+  .form-container,
+  .mobile-overlay,
+  .login-toast-container,
+  .delete-job-btn,
+  .login-overlay,
+  .delete-row-btn,
+  .edit-row-btn,
+  .save-row-btn,
+  .cancel-row-btn {
+    display: none !important;
+  }
+
+  /* Make panels look like clean paper sections */
+  .glass-panel {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+    padding: 1rem !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Force table formatting */
+  .data-table-container {
+    overflow: visible !important;
+  }
+
+  .data-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    color: #000000 !important;
+  }
+
+  .data-table th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #94a3b8 !important;
+    padding: 6px 4px !important;
+    font-size: 0.8rem !important;
+  }
+
+  .data-table td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 4px !important;
+    color: #334155 !important;
+    font-size: 0.75rem !important;
+    background: transparent !important;
+  }
+
+  /* Hide tooltips in print */
+  .recharts-tooltip-wrapper,
+  .custom-tooltip {
+    display: none !important;
+  }
+
+  /* Ensure chart container has visible borders and heights */
+  .chart-container {
+    border: 1px solid #cbd5e1 !important;
+    padding: 10px !important;
+    page-break-inside: avoid !important;
+    height: 350px !important;
+    background: #ffffff !important;
+  }
+
+  /* Show the print-only header */
+  .print-only-header {
+    display: block !important;
+    margin-bottom: 20px !important;
+    border-bottom: 2px solid #000000 !important;
+    padding-bottom: 12px !important;
+    color: #000000 !important;
+  }
+
+  .print-only-header h1 {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 6px !important;
+  }
+
+  .print-only-header p {
+    font-size: 0.9rem !important;
+    margin: 3px 0 !important;
+  }
 }

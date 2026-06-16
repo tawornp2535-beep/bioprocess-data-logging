@@ -99,5 +99,8 @@
       ]
     }
   ],
-  "customers": []
+  "customers": [],
+  "settings": {
+    "adminPassword": "FTC123"
+  }
 }

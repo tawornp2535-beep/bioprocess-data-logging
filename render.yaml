@@ -5,5 +5,9 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
-      - key: MONGODB_URI
-        sync: false   # set manually in Render Dashboard
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false   # ← วาง JSON ทั้งหมดของ firebase-service-account.json ในนี้
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
