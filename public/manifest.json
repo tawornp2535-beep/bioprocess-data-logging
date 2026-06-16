@@ -1,16 +1,25 @@
 {
   "short_name": "Bioprocess",
   "name": "Bioprocess Logging System",
+  "id": "/",
+  "scope": "/",
+  "start_url": "/",
+  "background_color": "#061315",
+  "theme_color": "#061315",
+  "display": "standalone",
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ],
-  "start_url": "/",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
-  "display": "standalone",
-  "orientation": "any"
+  ]
 }
