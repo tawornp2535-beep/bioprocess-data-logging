@@ -768,53 +768,7 @@ function App() {
           <h1 style={{ textAlign: 'center', marginBottom: '0.5rem', background: 'linear-gradient(to right, var(--accent-blue), var(--accent-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 700 }}>DBMS</h1>
           <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '2rem' }}>เครื่องมือบันทึกและจัดเก็บข้อมูล</p>
 
-          {/* PWA Install Button */}
-          {deferredPrompt && (
-            <button
-              onClick={handleInstallApp}
-              className="pwa-install-btn"
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '10px',
-                border: '1px solid #00f0ff',
-                background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.15), rgba(59, 130, 246, 0.15))',
-                color: '#00f0ff',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                marginBottom: '1.5rem',
-                transition: 'all 0.3s ease',
-                fontSize: '0.95rem'
-              }}
-            >
-              <span>📲 ติดตั้งแอปบนมือถือ / คอมพิวเตอร์</span>
-            </button>
-          )}
 
-          {/* iOS Safari Installation Instructions */}
-          {/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream && !isStandalone && (
-            <div style={{
-              padding: '10px 12px',
-              borderRadius: '10px',
-              border: '1px solid rgba(0, 240, 255, 0.3)',
-              background: 'rgba(0, 240, 255, 0.05)',
-              color: '#e2f1f5',
-              fontSize: '0.8rem',
-              lineHeight: '1.4',
-              marginBottom: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px'
-            }}>
-              <span style={{ fontWeight: 'bold', color: '#00f0ff' }}>💡 วิธีติดตั้งสำหรับ iPhone / iPad:</span>
-              <span>แตะที่ปุ่มแชร์ <span style={{ fontSize: '1rem' }}>📤</span> ด้านล่างเบราว์เซอร์ แล้วเลือก <span style={{ fontWeight: 'bold', color: '#00f0ff' }}>'เพิ่มไปยังหน้าจอโฮม' (Add to Home Screen)</span> เพื่อใช้งานเป็นแอป</span>
-            </div>
-          )}
-          
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {/* Admin Login Block */}
             <div style={{ padding: '1.25rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.3)' }}>
@@ -1231,46 +1185,7 @@ function App() {
         </div>
 
         {/* Footer */}
-        <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {deferredPrompt && (
-            <button 
-              className="sidebar-install-btn"
-              onClick={handleInstallApp}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                width: '100%',
-                padding: '0.75rem',
-                background: 'rgba(0, 240, 255, 0.1)',
-                border: '1px solid rgba(0, 240, 255, 0.2)',
-                color: '#00f0ff',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span>📲 ติดตั้งแอป</span>
-            </button>
-          )}
-
-          {/* iOS Safari instructions inside sidebar */}
-          {/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream && !isStandalone && (
-            <div style={{
-              padding: '8px 10px',
-              borderRadius: '6px',
-              border: '1px solid rgba(0, 240, 255, 0.2)',
-              background: 'rgba(0, 240, 255, 0.03)',
-              color: '#84b2bc',
-              fontSize: '0.7rem',
-              lineHeight: '1.3'
-            }}>
-              💡 <span style={{ color: '#00f0ff', fontWeight: 'bold' }}>วิธีติดตั้งบน iOS:</span> แตะปุ่มแชร์ 📤 แล้วเลือก 'เพิ่มไปยังหน้าจอโฮม'
-            </div>
-          )}
-
+        <div className="sidebar-footer">
           <button 
             className="sidebar-logout-btn"
             onClick={() => {
