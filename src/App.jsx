@@ -241,6 +241,9 @@ function App() {
 
   const [selectedCustomerJobs, setSelectedCustomerJobs] = useState({});
 
+  const [showCustomerShareModal, setShowCustomerShareModal] = useState(false);
+  const [shareModalJobId, setShareModalJobId] = useState(null);
+
   // Fetch Database from Backend Helper
   const fetchDB = async (shouldAutoSelect = false) => {
     try {
@@ -543,61 +546,6 @@ function App() {
       setShowCustomerToast(false);
       setIsToastHiding(false);
     }, 600);
-  };
-
-  const handleCopyShareLink = async (job) => {
-    let currentExpiryText = "ไม่มีวันหมดอายุ";
-    if (job.expiresAt) {
-      const expDate = new Date(job.expiresAt);
-      if (expDate > new Date()) {
-        currentExpiryText = `หมดอายุวันที่ ${expDate.toLocaleString('th-TH')}`;
-      } else {
-        currentExpiryText = `หมดอายุแล้วเมื่อ ${expDate.toLocaleString('th-TH')}`;
-      }
-    }
-
-    const inputHours = prompt(
-      `ระบุระยะเวลาที่ลูกค้าสามารถเข้าใช้งานลิงก์นี้ได้ (เป็นชั่วโมง)\n\n• ป้อนตัวเลข เช่น 24 (สำหรับ 1 วัน), 168 (สำหรับ 1 สัปดาห์)\n• เว้นว่าง หรือ ป้อน 0 เพื่อไม่จำกัดระยะเวลาการใช้งาน\n\nสถานะหมดอายุปัจจุบัน: ${currentExpiryText}`,
-      ""
-    );
-
-    if (inputHours === null) return; // User clicked Cancel
-
-    let expiresAt = null;
-    const hours = parseFloat(inputHours);
-
-    if (!isNaN(hours) && hours > 0) {
-      expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-    }
-
-    try {
-      const res = await fetch(`/api/jobs/${job.id}/expiry`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expiresAt })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        applyDBUpdate(data);
-
-        // Copy direct link to clipboard
-        const loginUrl = `${window.location.origin}/?job=${job.id}`;
-        await navigator.clipboard.writeText(loginUrl);
-
-        if (expiresAt) {
-          const expDate = new Date(expiresAt);
-          alert(`คัดลอกลิงก์สำหรับลูกค้าเข้าใช้งานเรียบร้อยแล้ว!\n\nลิงก์: ${loginUrl}\n\n⚠️ ลิงก์นี้จะหมดอายุวันที่: ${expDate.toLocaleString('th-TH')}`);
-        } else {
-          alert(`คัดลอกลิงก์สำหรับลูกค้าเข้าใช้งานเรียบร้อยแล้ว!\n\nลิงก์: ${loginUrl}\n\n(ลิงก์นี้ไม่มีวันหมดอายุ)`);
-        }
-      } else {
-        alert("ไม่สามารถกำหนดเวลาหมดอายุได้ กรุณาลองใหม่อีกครั้ง");
-      }
-    } catch (err) {
-      console.error("Error setting session expiry:", err);
-      alert("เกิดข้อผิดพลาดในการตั้งค่าเวลาหมดอายุ");
-    }
   };
 
   // Reset replay when job changes
@@ -1640,9 +1588,10 @@ function App() {
                                 style={{ color: '#10b981', cursor: 'pointer', background: 'rgba(16, 185, 129, 0.08)', padding: '0 4px', borderRadius: '3px', fontWeight: 600 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCopyShareLink(job);
+                                  setShareModalJobId(job.id);
+                                  setShowCustomerShareModal(true);
                                 }}
-                                title="Click to Copy Direct Login Link for Customer"
+                                title="Click to open Customer Share Menu"
                               >
                                 ลิงก์แชร์
                               </span>
@@ -1895,7 +1844,8 @@ function App() {
                                     }}
                                     onClick={() => {
                                       const targetJob = custJobs.find(j => j.id === selectedJobId) || custJobs[0];
-                                      handleCopyShareLink(targetJob);
+                                      setShareModalJobId(targetJob.id);
+                                      setShowCustomerShareModal(true);
                                     }}
                                   >
                                     ลิงก์แชร์
@@ -2397,6 +2347,19 @@ function App() {
                 <button className="export-btn" onClick={exportToCSV} disabled={!currentJob} style={{ margin: 0 }}>
                   <Download size={18} style={{ marginRight: '8px' }} /> Export CSV
                 </button>
+                {currentJob && userRole === 'admin' && (
+                  <button 
+                    className="export-btn" 
+                    onClick={() => {
+                      setShareModalJobId(currentJob.id);
+                      setShowCustomerShareModal(true);
+                    }} 
+                    style={{ margin: 0, background: 'linear-gradient(135deg, var(--accent-green), #059669)', border: 'none', color: '#fff' }}
+                    title="ตั้งค่าการแชร์และคัดลอกลิงก์ให้ลูกค้า"
+                  >
+                    <Users size={18} style={{ marginRight: '8px' }} /> แชร์ลูกค้า
+                  </button>
+                )}
                 {/* Auto simulation removed */}
               </div>
             </header>
@@ -3114,6 +3077,242 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Glassmorphic Customer Share Modal */}
+      {showCustomerShareModal && shareModalJobId && (
+        <div className="modal-backdrop" onClick={() => { setShowCustomerShareModal(false); setShareModalJobId(null); }}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Modal Header */}
+            <div className="modal-header">
+              <h3>
+                <Users size={22} color="var(--accent-green)" />
+                ตั้งค่าลิงก์ลูกค้า & ความปลอดภัย (Customer Share)
+              </h3>
+              <button 
+                className="modal-close-btn"
+                onClick={() => {
+                  setShowCustomerShareModal(false);
+                  setShareModalJobId(null);
+                }}
+                title="ปิด"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            {(() => {
+              const job = jobs.find(j => j.id === shareModalJobId);
+              if (!job) return <div style={{ color: 'var(--accent-red)' }}>ไม่พบข้อมูลรอบบันทึก (Session Not Found)</div>;
+              
+              const machine = machines.find(m => m.id === job.machineId);
+              
+              // Expiry calculations
+              let expiryStatusText = "ไม่มีวันหมดอายุ (Unlimited)";
+              let isExpired = false;
+              if (job.expiresAt) {
+                const expDate = new Date(job.expiresAt);
+                isExpired = expDate < new Date();
+                expiryStatusText = isExpired 
+                  ? `หมดอายุแล้วเมื่อ ${expDate.toLocaleString('th-TH')}` 
+                  : `หมดอายุวันที่ ${expDate.toLocaleString('th-TH')}`;
+              }
+              
+              // Look up customer assigned to this machine
+              const assignedCustomer = customers.find(c => c.machineId === job.machineId);
+              const loginUrl = `${window.location.origin}/?job=${job.id}`;
+              
+              // Email invitation body template
+              const customerName = assignedCustomer ? assignedCustomer.companyName : "[ชื่อลูกค้า]";
+              const expiryInfoText = job.expiresAt ? new Date(job.expiresAt).toLocaleString('th-TH') : "ไม่มีวันหมดอายุ";
+              const invitationText = `เรียนคุณ ${customerName},\n\nทางแล็บขอส่งลิงก์สำหรับเข้าดูข้อมูลไบโอโพรเซสรอบรัน "${job.name}" (${machine?.name || 'เครื่องมือ'}) แบบเรียลไทม์\n\nลิงก์เข้าสู่ระบบ: ${loginUrl}\nวันหมดอายุ: ${expiryInfoText}\n\nขอบคุณค่ะ/ครับ\nDBMS System`;
+
+              return (
+                <div className="modal-body">
+                  
+                  {/* Info Row */}
+                  <div className="modal-info-box">
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>รอบรัน (Session): </span>
+                      <strong style={{ color: 'var(--accent-blue)' }}>{job.name}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>เครื่องมือ: </span>
+                      <strong>{machine?.name || '-'}</strong>
+                    </div>
+                  </div>
+
+                  {/* Direct Link */}
+                  <div>
+                    <label className="modal-label">🔗 ลิงก์เข้าใช้งานตรงสำหรับลูกค้า (Direct Share Link)</label>
+                    <div className="modal-input-row">
+                      <input 
+                        type="text" 
+                        readOnly 
+                        value={loginUrl} 
+                        className="modal-input"
+                        onClick={(e) => e.target.select()}
+                      />
+                      <button 
+                        className="submit-btn" 
+                        style={{ margin: 0, padding: '0 16px', background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)' }}
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(loginUrl);
+                          alert("คัดลอกลิงก์เรียบร้อยแล้ว!");
+                        }}
+                      >
+                        คัดลอกลิงก์
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Access Expiration */}
+                  <div className="modal-section">
+                    <label className="modal-label">⏱️ กำหนดเวลาหมดอายุ (Access Expiration)</label>
+                    <div className="modal-preset-row">
+                      {[
+                        { label: '24 ชม. (1 วัน)', value: 24 },
+                        { label: '72 ชม. (3 วัน)', value: 72 },
+                        { label: '168 ชม. (7 วัน)', value: 168 },
+                        { label: 'ไม่จำกัด', value: 0 }
+                      ].map((preset) => (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          className="modal-preset-btn"
+                          onClick={async () => {
+                            let expiresAt = null;
+                            if (preset.value > 0) {
+                              expiresAt = new Date(Date.now() + preset.value * 60 * 60 * 1000).toISOString();
+                            }
+                            try {
+                              const res = await fetch(`/api/jobs/${job.id}/expiry`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ expiresAt })
+                              });
+                              if (res.ok) {
+                                const data = await res.json();
+                                applyDBUpdate(data);
+                              }
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+
+                      {/* Manual Input */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                        <input 
+                          type="number" 
+                          placeholder="ชม. เช่น 48" 
+                          className="modal-input"
+                          style={{ width: '90px', padding: '6px 8px', textAlign: 'center', fontSize: '0.85rem' }}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              const hrs = parseFloat(e.target.value);
+                              if (!isNaN(hrs) && hrs >= 0) {
+                                let expiresAt = null;
+                                if (hrs > 0) {
+                                  expiresAt = new Date(Date.now() + hrs * 60 * 60 * 1000).toISOString();
+                                }
+                                try {
+                                  const res = await fetch(`/api/jobs/${job.id}/expiry`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ expiresAt })
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    applyDBUpdate(data);
+                                    e.target.value = '';
+                                    alert(`ตั้งค่าหมดอายุในอีก ${hrs} ชั่วโมงเรียบร้อย!`);
+                                  }
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }
+                            }
+                          }}
+                        />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>ชม. (กด Enter)</span>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '0.85rem', marginTop: '10px' }}>
+                      สถานะอายุลิงก์: <span style={{ color: isExpired ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: 700 }}>{expiryStatusText}</span>
+                    </div>
+                  </div>
+
+                  {/* Customer Assignment */}
+                  <div className="modal-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <label className="modal-label" style={{ margin: 0 }}>👥 ลูกค้าผู้ดูแลเครื่องมือ (Assigned Customer)</label>
+                      {assignedCustomer && (
+                        <button
+                          type="button"
+                          className="submit-btn"
+                          style={{ 
+                            margin: 0, 
+                            padding: '4px 8px', 
+                            fontSize: '0.75rem', 
+                            background: 'rgba(16, 185, 129, 0.1)', 
+                            border: '1px solid rgba(16, 185, 129, 0.3)', 
+                            color: 'var(--accent-green)', 
+                            borderRadius: '4px',
+                            height: 'auto',
+                            fontWeight: 600
+                          }}
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(invitationText);
+                            alert("คัดลอกข้อความคำเชิญสำหรับส่งให้ลูกค้าเรียบร้อยแล้ว!");
+                          }}
+                        >
+                          📋 คัดลอกข้อความคำเชิญ
+                        </button>
+                      )}
+                    </div>
+
+                    {assignedCustomer ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', background: 'rgba(255, 255, 255, 0.02)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <div>บริษัท/ชื่อ: <strong>{assignedCustomer.companyName}</strong></div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>อีเมล: {assignedCustomer.email || 'ไม่ได้ระบุ'}</div>
+                        </div>
+                        
+                        <div className="modal-preview-box">
+                          {invitationText}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.15)', textAlign: 'center', lineHeight: 1.5 }}>
+                        ⚠️ ยังไม่ได้ระบุข้อมูลลูกค้ารับผิดชอบเครื่องมือ "{machine?.name || ''}" ในฐานข้อมูล<br/>
+                        <span 
+                          style={{ color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, display: 'inline-block', marginTop: '6px' }}
+                          onClick={() => {
+                            setShowCustomerShareModal(false);
+                            setShareModalJobId(null);
+                            setCurrentAppView('customers');
+                            setCustomerFormData(prev => ({ ...prev, machineId: job.machineId }));
+                          }}
+                        >
+                          คลิกเพื่อไปหน้าฐานข้อมูลลูกค้าเพื่อเพิ่มข้อมูลและจับคู่เครื่องมือ
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              );
+            })()}
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
