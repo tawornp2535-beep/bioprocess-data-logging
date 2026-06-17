@@ -1084,9 +1084,9 @@ function App() {
   };
 
   // Export
-  const exportToCSV = () => {
-    if (!currentJob || currentJob.data.length === 0) {
-      alert("No data to export!");
+  const exportToCSV = (job = currentJob) => {
+    if (!job || !job.data || job.data.length === 0) {
+      alert("ไม่มีข้อมูลที่จะส่งออก!");
       return;
     }
     const headers = [
@@ -1101,11 +1101,12 @@ function App() {
       'Remarks'
     ];
     const csvRows = [headers.join(',')];
-    const rowsToExport = getSortedRows().length > 0 ? getSortedRows() : currentJob.data;
+    const isCurrent = job.id === currentJob?.id;
+    const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
     rowsToExport.forEach(row => {
       const dateVal = row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0, 10)) : '');
       const timeVal = row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0, 5)) : '');
-      const hrVal = row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(currentJob, row.timestamp);
+      const hrVal = row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(job, row.timestamp);
       const t_s = row.temp_set !== undefined ? row.temp_set : row.temp;
       const t_r = row.temp_read !== undefined ? row.temp_read : row.temp;
       const p_s = row.ph_set !== undefined ? row.ph_set : row.ph;
@@ -1137,26 +1138,27 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const safeName = currentJob.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const safeName = job.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     link.setAttribute('download', `${safeName}_data.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const exportToExcel = () => {
-    if (!currentJob || currentJob.data.length === 0) {
-      alert("No data to export!");
+  const exportToExcel = (job = currentJob) => {
+    if (!job || !job.data || job.data.length === 0) {
+      alert("ไม่มีข้อมูลที่จะส่งออก!");
       return;
     }
 
-    const rowsToExport = getSortedRows().length > 0 ? getSortedRows() : currentJob.data;
+    const isCurrent = job.id === currentJob?.id;
+    const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
     
     const sheetData = rowsToExport.map(row => {
       return {
         'Date': row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0, 10)) : ''),
         'Time': row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0, 5)) : ''),
-        'Culture Hour (Hr)': row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(currentJob, row.timestamp),
+        'Culture Hour (Hr)': row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(job, row.timestamp),
         'Temp SV (°C)': row.temp_set !== undefined ? row.temp_set : row.temp,
         'Temp PV (°C)': row.temp_read !== undefined ? row.temp_read : row.temp,
         'pH SV': row.ph_set !== undefined ? row.ph_set : row.ph,
@@ -1186,7 +1188,7 @@ function App() {
     });
     worksheet['!cols'] = max_widths.map(w => ({ wch: w }));
 
-    const safeName = currentJob.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const safeName = job.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     XLSX.writeFile(workbook, `${safeName}_data.xlsx`);
   };
 
@@ -2021,7 +2023,7 @@ function App() {
                               <td>{job.data?.length || 0} จุด</td>
                               <td><code>{job.id}</code></td>
                               <td>
-                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                   <button 
                                     className="replay-close-btn"
                                     style={{ background: 'rgba(0, 240, 255, 0.1)', borderColor: 'rgba(0, 240, 255, 0.2)', color: '#00f0ff', padding: '6px 12px' }}
@@ -2033,6 +2035,24 @@ function App() {
                                     }}
                                   >
                                     เปิดบอร์ดข้อมูล
+                                  </button>
+                                  <button 
+                                    className="export-btn"
+                                    onClick={() => exportToExcel(job)}
+                                    disabled={!job.data || job.data.length === 0}
+                                    style={{ margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}
+                                    title="ดาวน์โหลด Excel สำหรับรอบนี้"
+                                  >
+                                    <Download size={14} style={{ marginRight: '4px' }} /> Excel
+                                  </button>
+                                  <button 
+                                    className="export-btn"
+                                    onClick={() => exportToCSV(job)}
+                                    disabled={!job.data || job.data.length === 0}
+                                    style={{ margin: 0, padding: '6px 12px', fontSize: '0.85rem' }}
+                                    title="ดาวน์โหลด CSV สำหรับรอบนี้"
+                                  >
+                                    <Download size={14} style={{ marginRight: '4px' }} /> CSV
                                   </button>
                                   <button 
                                     className="delete-row-btn" 
