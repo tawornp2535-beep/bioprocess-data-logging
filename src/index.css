@@ -498,7 +498,7 @@ body {
 }
 
 /* Mobile responsiveness */
-@media (max-width: 768px) {
+@media (max-width: 1024px) or (max-height: 500px) {
   .app-layout {
     flex-direction: column;
     height: 100vh;
@@ -883,5 +883,14 @@ body {
   .print-only-header p {
     font-size: 0.9rem !important;
     margin: 3px 0 !important;
+  }
+}
+
+/* Landscape Mobile Fix for Login Overlay */
+@media (max-height: 500px) {
+  .login-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 2rem 0;
   }
 }
