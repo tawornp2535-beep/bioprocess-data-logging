@@ -8,7 +8,7 @@ import {
   Download, LayoutDashboard, LineChart as ChartIcon, FolderPlus, Trash2, FolderOpen,
   Table as TableIcon, Users, Activity as ActivityIcon, Edit3,
   ChevronDown, ChevronUp, ChevronRight, Settings, LogOut, Cpu, Database, Folder,
-  Menu, X, Check
+  Menu, X, Check, Play, Pause, RotateCcw
 } from 'lucide-react';
 import './index.css';
 import './form.css';
@@ -204,8 +204,9 @@ function App() {
   const [isToastHiding, setIsToastHiding] = useState(false);
   // Replay recorded data (playback) state
   const [isReplay, setIsReplay] = useState(false);
-  const [replayIndex, setReplayIndex] = useState(0);
-  const [replayVisibleData, setReplayVisibleData] = useState([]);
+  const [isReplayPlaying, setIsReplayPlaying] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(1);
+  const [replaySpeed, setReplaySpeed] = useState(1500); // default speed (1x = 1.5s per point)
 
   const [formData, setFormData] = useState({
     temp_set: 38.0, temp_read: 38.0,
@@ -393,8 +394,24 @@ function App() {
   const currentMachine = machines.find(m => m.id === currentMachineId);
   const currentJob = jobs.find(j => j.id === currentJobId) || jobsForMachine[0];
   const currentJobData = currentJob?.data || [];
+
+  // Sort full data chronologically
+  const sortedFullData = React.useMemo(() => {
+    return [...currentJobData].sort((a, b) => {
+      const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return aTime - bTime;
+    });
+  }, [currentJobData]);
+
   // Choose which data set to render: live/full stored data or replayed slice
-  const displayData = isReplay ? replayVisibleData : currentJobData;
+  const displayData = React.useMemo(() => {
+    if (isReplay) {
+      return sortedFullData.slice(0, replayIndex);
+    }
+    return currentJobData;
+  }, [isReplay, sortedFullData, replayIndex, currentJobData]);
+
   const chartData = displayData.map((row, idx) => ({
     ...row,
     originalIndex: idx,
@@ -577,20 +594,19 @@ function App() {
     }
   };
 
-  // Reset replay when job changes or jobs list updates
+  // Reset replay when job changes
   useEffect(() => {
     if (!currentJobId) {
       setIsReplay(false);
-      setReplayIndex(0);
-      setReplayVisibleData([]);
+      setIsReplayPlaying(false);
+      setReplayIndex(1);
     } else {
       // If replay active but job changed, restart replay
       if (isReplay) {
-        setReplayIndex(0);
-        setReplayVisibleData([]);
+        setReplayIndex(1);
       }
     }
-  }, [currentJobId, jobs]);
+  }, [currentJobId]);
 
   useEffect(() => {
     if (currentJob && currentJob.machineId !== currentMachineId) {
@@ -788,33 +804,27 @@ function App() {
     }
   };
 
-  // Replay (playback) logic: append stored points to visible slice
+  // Replay (playback) timer logic
   useEffect(() => {
-    if (!isReplay) return undefined;
-    if (!currentJobData || currentJobData.length === 0) {
+    if (!isReplay || !isReplayPlaying) return undefined;
+    if (sortedFullData.length === 0) {
       setIsReplay(false);
+      setIsReplayPlaying(false);
       return undefined;
     }
 
-    let interval = null;
-    interval = setInterval(() => {
+    const interval = setInterval(() => {
       setReplayIndex((ri) => {
-        const next = ri + 1;
-        if (currentJobData[ri]) {
-          setReplayVisibleData(prev => [...prev, currentJobData[ri]]);
+        if (ri >= sortedFullData.length) {
+          setIsReplayPlaying(false);
+          return ri;
         }
-        if (next >= currentJobData.length) {
-          // Finish replay
-          clearInterval(interval);
-          setIsReplay(false);
-          return currentJobData.length; // set index beyond end
-        }
-        return next;
+        return ri + 1;
       });
-    }, 2000);
+    }, replaySpeed);
 
     return () => clearInterval(interval);
-  }, [isReplay, currentJobData]);
+  }, [isReplay, isReplayPlaying, sortedFullData.length, replaySpeed]);
 
   const deleteDataPoint = async (index) => {
     if (window.confirm("Delete this recorded value?")) {
@@ -2013,27 +2023,25 @@ function App() {
                 >
                   {theme === 'dark' ? '🌙' : '☀️'}
                 </button>
-                {userRole === 'admin' && (
-                  <button
-                    className={`toggle-btn ${isReplay ? 'active' : ''}`}
-                    onClick={() => {
-                      if (isReplay) {
-                        setIsReplay(false);
-                        setReplayIndex(0);
-                        setReplayVisibleData([]);
-                      } else {
-                        // start replay from stored data
-                        setReplayVisibleData([]);
-                        setReplayIndex(0);
-                        setIsReplay(true);
-                      }
-                    }}
-                    disabled={!currentJob || currentJobData.length === 0}
-                    style={{ margin: 0 }}
-                  >
-                    {isReplay ? 'Replay ON' : 'Replay'}
-                  </button>
-                )}
+                <button
+                  className={`toggle-btn ${isReplay ? 'active' : ''}`}
+                  onClick={() => {
+                    if (isReplay) {
+                      setIsReplay(false);
+                      setIsReplayPlaying(false);
+                      setReplayIndex(1);
+                    } else {
+                      // start replay from stored data
+                      setReplayIndex(1);
+                      setIsReplay(true);
+                      setIsReplayPlaying(true);
+                    }
+                  }}
+                  disabled={!currentJob || currentJobData.length === 0}
+                  style={{ margin: 0 }}
+                >
+                  {isReplay ? 'Replay ON' : 'Replay'}
+                </button>
                 <button className="export-btn" onClick={exportToExcel} disabled={!currentJob} style={{ margin: 0 }}>
                   <Download size={18} style={{ marginRight: '8px' }} /> Export Excel
                 </button>
@@ -2666,6 +2674,98 @@ function App() {
               )
             )}
           </>
+        )}
+
+        {/* Replay Control Panel */}
+        {isReplay && sortedFullData.length > 0 && (
+          <div className="replay-control-panel">
+            <div className="replay-controls-row">
+              {/* Buttons Group */}
+              <div className="replay-btn-group">
+                <button 
+                  className="replay-control-btn"
+                  onClick={() => {
+                    setReplayIndex(1);
+                    setIsReplayPlaying(true);
+                  }}
+                  title="Restart Replay"
+                >
+                  <RotateCcw size={18} />
+                </button>
+                <button 
+                  className="replay-control-btn active"
+                  style={{ background: isReplayPlaying ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.05)' }}
+                  onClick={() => setIsReplayPlaying(!isReplayPlaying)}
+                  title={isReplayPlaying ? "Pause" : "Play"}
+                >
+                  {isReplayPlaying ? <Pause size={18} /> : <Play size={18} />}
+                </button>
+              </div>
+
+              {/* Scrubber Slider */}
+              <div className="replay-slider-container">
+                <input 
+                  type="range" 
+                  min="1" 
+                  max={sortedFullData.length} 
+                  value={replayIndex} 
+                  onChange={(e) => {
+                    setReplayIndex(Number(e.target.value));
+                    setIsReplayPlaying(false);
+                  }}
+                  className="replay-slider"
+                />
+                <span className="replay-status-info">
+                  จุดที่ {replayIndex} / {sortedFullData.length} (ชั่วโมงเลี้ยงเชื้อ: {chartData[replayIndex - 1]?.cultureHour?.toFixed(1) || '0.0'} ชม.)
+                </span>
+              </div>
+
+              {/* Speed & Close Group */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div className="replay-speed-selector">
+                  <button 
+                    className={`replay-speed-btn ${replaySpeed === 2500 ? 'active' : ''}`}
+                    onClick={() => setReplaySpeed(2500)}
+                    title="Slow Speed"
+                  >
+                    0.5x
+                  </button>
+                  <button 
+                    className={`replay-speed-btn ${replaySpeed === 1500 ? 'active' : ''}`}
+                    onClick={() => setReplaySpeed(1500)}
+                    title="Normal Speed"
+                  >
+                    1x
+                  </button>
+                  <button 
+                    className={`replay-speed-btn ${replaySpeed === 600 ? 'active' : ''}`}
+                    onClick={() => setReplaySpeed(600)}
+                    title="Fast Speed"
+                  >
+                    2.5x
+                  </button>
+                  <button 
+                    className={`replay-speed-btn ${replaySpeed === 250 ? 'active' : ''}`}
+                    onClick={() => setReplaySpeed(250)}
+                    title="Hyper Speed"
+                  >
+                    5x
+                  </button>
+                </div>
+
+                <button 
+                  className="replay-close-btn"
+                  onClick={() => {
+                    setIsReplay(false);
+                    setIsReplayPlaying(false);
+                    setReplayIndex(1);
+                  }}
+                >
+                  Exit Replay
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
