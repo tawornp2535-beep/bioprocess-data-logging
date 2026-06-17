@@ -248,6 +248,16 @@ function App() {
   const [newSessionName, setNewSessionName] = useState('');
   const [newSessionMachineId, setNewSessionMachineId] = useState('');
 
+  const [showAddMachineModal, setShowAddMachineModal] = useState(false);
+  const [newMachineName, setNewMachineName] = useState('');
+
+  const [newSessionCustomerId, setNewSessionCustomerId] = useState('');
+  const [newSessionCustomerName, setNewSessionCustomerName] = useState('');
+  const [newSessionCustomerEmail, setNewSessionCustomerEmail] = useState('');
+  const [newSessionExpiryHours, setNewSessionExpiryHours] = useState(0);
+  const [showWizardSuccess, setShowWizardSuccess] = useState(false);
+  const [wizardSuccessJobId, setWizardSuccessJobId] = useState(null);
+
   // Fetch Database from Backend Helper
   const fetchDB = async (shouldAutoSelect = false) => {
     try {
@@ -621,46 +631,57 @@ function App() {
     setCustomers(data.customers);
   };
 
-  // Actions
-  const handleMachineChange = async (e) => {
+  const handleMachineChange = (e) => {
     const value = e.target.value;
     if (value === 'ADD_NEW') {
-      const name = prompt("Enter a name for the new Machine/Instrument:");
-      if (name && name.trim()) {
-        try {
-          const res = await fetch('/api/machines', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name.trim() })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            applyDBUpdate(data);
-            
-            const newMachine = data.machines[data.machines.length - 1];
-            if (newMachine) {
-              setCurrentMachineId(newMachine.id);
-              const jobRes = await fetch('/api/jobs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ machineId: newMachine.id, name: 'Session 1' })
-              });
-              if (jobRes.ok) {
-                const jobData = await jobRes.json();
-                applyDBUpdate(jobData);
-                const newJob = jobData.jobs.find(j => j.machineId === newMachine.id);
-                if (newJob) {
-                  setCurrentJobId(newJob.id);
-                }
-              }
-            }
-          }
-        } catch (err) {
-          console.error(err);
-        }
-      }
+      setNewMachineName('');
+      setShowAddMachineModal(true);
     } else {
       setCurrentMachineId(value);
+    }
+  };
+
+  const submitNewMachine = async (e) => {
+    if (e) e.preventDefault();
+    if (!newMachineName.trim()) {
+      alert("กรุณากรอกชื่อเครื่องมือ");
+      return;
+    }
+    try {
+      const res = await fetch('/api/machines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newMachineName.trim() })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        applyDBUpdate(data);
+        
+        const newMachine = data.machines[data.machines.length - 1];
+        if (newMachine) {
+          setCurrentMachineId(newMachine.id);
+          const jobRes = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ machineId: newMachine.id, name: 'Session 1' })
+          });
+          if (jobRes.ok) {
+            const jobData = await jobRes.json();
+            applyDBUpdate(jobData);
+            const newJob = jobData.jobs.find(j => j.machineId === newMachine.id);
+            if (newJob) {
+              setCurrentJobId(newJob.id);
+            }
+          }
+        }
+        setShowAddMachineModal(false);
+        setNewMachineName('');
+      } else {
+        alert("ไม่สามารถสร้างเครื่องมือใหม่ได้");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     }
   };
 
@@ -732,28 +753,81 @@ function App() {
       alert("กรุณาเลือกเครื่องมือ");
       return;
     }
+    // Validate new customer name if ADD_NEW selected
+    if (newSessionCustomerId === 'ADD_NEW' && !newSessionCustomerName.trim()) {
+      alert("กรุณากรอกชื่อลูกค้าใหม่");
+      return;
+    }
     try {
+      // Step 1: Create the job
       const res = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ machineId: newSessionMachineId, name: newSessionName.trim() })
       });
-      if (res.ok) {
-        const data = await res.json();
-        applyDBUpdate(data);
-        
-        const newJob = data.jobs.find(j => j.machineId === newSessionMachineId && j.name === newSessionName.trim());
-        if (newJob) {
-          if (newSessionMachineId !== currentMachineId) {
-            setCurrentMachineId(newSessionMachineId);
-          }
-          setCurrentJobId(newJob.id);
-        }
-        setShowAddSessionModal(false);
-        setNewSessionName('');
-      } else {
+      if (!res.ok) {
         alert("ไม่สามารถสร้างงานใหม่ได้ กรุณาลองใหม่อีกครั้ง");
+        return;
       }
+      let data = await res.json();
+      applyDBUpdate(data);
+
+      // Find the newly created job
+      const newJob = data.jobs.find(j => j.machineId === newSessionMachineId && j.name === newSessionName.trim());
+      if (!newJob) {
+        alert("ไม่พบงานที่สร้างใหม่ กรุณาลองใหม่อีกครั้ง");
+        return;
+      }
+
+      // Step 2: Set expiry if specified
+      if (newSessionExpiryHours > 0) {
+        const expiresAt = new Date(Date.now() + newSessionExpiryHours * 60 * 60 * 1000).toISOString();
+        try {
+          const expiryRes = await fetch(`/api/jobs/${newJob.id}/expiry`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expiresAt })
+          });
+          if (expiryRes.ok) {
+            data = await expiryRes.json();
+            applyDBUpdate(data);
+          }
+        } catch (expiryErr) {
+          console.error("Error setting expiry:", expiryErr);
+        }
+      }
+
+      // Step 3: Create new customer if ADD_NEW selected
+      if (newSessionCustomerId === 'ADD_NEW' && newSessionCustomerName.trim()) {
+        try {
+          const custRes = await fetch('/api/customers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              companyName: newSessionCustomerName.trim(),
+              machineId: newSessionMachineId,
+              email: newSessionCustomerEmail.trim() || undefined
+            })
+          });
+          if (custRes.ok) {
+            data = await custRes.json();
+            applyDBUpdate(data);
+          }
+        } catch (custErr) {
+          console.error("Error creating customer:", custErr);
+        }
+      }
+
+      // Step 4: Update machine selection and show success screen
+      if (newSessionMachineId !== currentMachineId) {
+        setCurrentMachineId(newSessionMachineId);
+      }
+      setCurrentJobId(newJob.id);
+
+      // Show success screen inside wizard
+      setWizardSuccessJobId(newJob.id);
+      setShowWizardSuccess(true);
+
     } catch (err) {
       console.error("Error creating job:", err);
       alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
@@ -1493,160 +1567,35 @@ function App() {
                 </span>
               </div>
 
-              {/* Menu Combined Jobs */}
+              {/* Menu Sessions */}
               <div 
-                className={`sidebar-menu-item ${currentAppView === 'combined_jobs' ? 'active' : ''}`}
+                className={`sidebar-menu-item ${currentAppView === 'sessions' ? 'active' : ''}`}
                 onClick={() => {
-                  setCurrentAppView('combined_jobs');
+                  setCurrentAppView('sessions');
                   setIsMobileMenuOpen(false);
                 }}
               >
                 <span className="sidebar-menu-link">
-                  <Database size={18} />
-                  ข้อมูลงานรวม (Combined)
+                  <FolderOpen size={18} />
+                  รอบรันทั้งหมด (Sessions)
                 </span>
+                <span className="sidebar-badge">{jobs.length}</span>
               </div>
 
-              {/* Instrument Accordion */}
+              {/* Menu Instruments */}
               <div 
-                className="sidebar-menu-item"
-                onClick={() => setIsInstrumentsExpanded(!isInstrumentsExpanded)}
+                className={`sidebar-menu-item ${currentAppView === 'instruments' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('instruments');
+                  setIsMobileMenuOpen(false);
+                }}
               >
                 <span className="sidebar-menu-link">
                   <Cpu size={18} />
-                  Instruments
+                  เครื่องมือ (Instruments)
                 </span>
-                <span className="sidebar-menu-arrow">
-                  {isInstrumentsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </span>
+                <span className="sidebar-badge">{machines.length}</span>
               </div>
-              
-              {isInstrumentsExpanded && (
-                <div className="sidebar-submenu">
-                  {machines.map(m => (
-                    <div 
-                      key={m.id}
-                      className={`sidebar-submenu-item ${m.id === currentMachineId && currentAppView === 'monitoring' ? 'active' : ''}`}
-                      onClick={() => {
-                        setCurrentAppView('monitoring');
-                        setCurrentMachineId(m.id);
-                        setIsMobileMenuOpen(false);
-                        // Filter and auto-select first job for this machine
-                        const machineJobs = jobs.filter(j => j.machineId === m.id);
-                        if (machineJobs.length > 0) {
-                          setCurrentJobId(machineJobs[0].id);
-                        } else {
-                          setCurrentJobId(null);
-                        }
-                      }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
-                        {m.id === currentMachineId && currentAppView === 'monitoring' && <span className="sidebar-submenu-dot" />}
-                        {m.name}
-                      </span>
-                      {m.id === currentMachineId && (
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                          <Edit3 size={13} style={{ cursor: 'pointer', opacity: 0.8 }} onClick={renameMachine} title="Rename" />
-                          {machines.length > 1 && (
-                            <Trash2 size={13} style={{ cursor: 'pointer', color: '#ef4444', opacity: 0.8 }} onClick={deleteMachine} title="Delete" />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  <div 
-                    className="sidebar-submenu-item" 
-                    style={{ color: '#00f0ff', fontWeight: 600 }}
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      handleMachineChange({ target: { value: 'ADD_NEW' } });
-                    }}
-                  >
-                    + Add Instrument...
-                  </div>
-                </div>
-              )}
-
-              {/* Sessions Accordion */}
-              {currentAppView === 'monitoring' && currentMachineId && (
-                <>
-                  <div 
-                    className="sidebar-menu-item"
-                    onClick={() => setIsSessionsExpanded(!isSessionsExpanded)}
-                  >
-                    <span className="sidebar-menu-link">
-                      <FolderOpen size={18} />
-                      Sessions
-                    </span>
-                    <span className="sidebar-menu-arrow">
-                      {isSessionsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </span>
-                  </div>
-                  
-                  {isSessionsExpanded && (
-                    <div className="sidebar-submenu">
-                      {jobsForMachine.map(job => (
-                        <div 
-                          key={job.id}
-                          className={`sidebar-submenu-item ${job.id === currentJobId ? 'active' : ''}`}
-                          onClick={() => {
-                            setCurrentJobId(job.id);
-                            setIsMobileMenuOpen(false);
-                          }}
-                          style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '2px', padding: '6px 8px' }}
-                        >
-                          <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', fontWeight: job.id === currentJobId ? '600' : 'normal', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
-                              {job.id === currentJobId && <span className="sidebar-submenu-dot" />}
-                              {job.name}
-                            </span>
-                            <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
-                              <Trash2 size={13} style={{ cursor: 'pointer', color: '#ef4444', opacity: 0.8 }} onClick={(e) => deleteJob(job.id, e)} title="Delete Session" />
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.7rem', color: '#688d96', marginTop: '2px' }}>
-                            <span>{job.createdAt.split(',')[0]}</span>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              <span 
-                                style={{ color: '#10b981', cursor: 'pointer', background: 'rgba(16, 185, 129, 0.08)', padding: '0 4px', borderRadius: '3px', fontWeight: 600 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShareModalJobId(job.id);
-                                  setShowCustomerShareModal(true);
-                                }}
-                                title="Click to open Customer Share Menu"
-                              >
-                                ลิงก์แชร์
-                              </span>
-                              <span 
-                                style={{ color: '#00f0ff', cursor: 'pointer', background: 'rgba(0, 240, 255, 0.05)', padding: '0 4px', borderRadius: '3px' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(job.id);
-                                  alert(`คัดลอกรหัสงานเรียบร้อย: ${job.id}`);
-                                }}
-                                title="Click to copy Code"
-                              >
-                                Code: {job.id.substring(4, 9)}..
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      <div 
-                        className="sidebar-submenu-item"
-                        style={{ color: '#00f0ff', fontWeight: 600 }}
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          createNewJob();
-                        }}
-                      >
-                        + Add Session...
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
 
               {/* Category: Management */}
               <div className="sidebar-menu-header">Management</div>
@@ -1895,33 +1844,180 @@ function App() {
               </div>
             </div>
           </div>
-        ) : currentAppView === 'combined_jobs' ? (
-          /* COMBINED JOBS VIEW */
+        ) : currentAppView === 'instruments' ? (
+          /* INSTRUMENTS VIEW */
+          <div className="instruments-view">
+            <header className="dashboard-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2>จัดการเครื่องมือ (Instruments Management)</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
+                  แสดงรายการ ลบ แก้ไขชื่อ และเพิ่มเครื่องมือ/อุปกรณ์ bioreactor ใหม่ทั้งหมด
+                </p>
+              </div>
+              <button
+                className="submit-btn"
+                style={{
+                  margin: 0,
+                  padding: '8px 16px',
+                  fontSize: '0.9rem',
+                  background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onClick={() => {
+                  setNewMachineName('');
+                  setShowAddMachineModal(true);
+                }}
+              >
+                <PlusCircle size={18} />
+                + เพิ่มเครื่องมือใหม่
+              </button>
+            </header>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+              {machines.map(m => {
+                const machineJobs = jobs.filter(j => j.machineId === m.id);
+                const isActive = m.id === currentMachineId;
+                
+                return (
+                  <div key={m.id} className="glass-panel" style={{ padding: '1.5rem', border: isActive ? '1px solid rgba(0, 240, 255, 0.4)' : '1px solid var(--border-color)', boxShadow: isActive ? '0 0 15px rgba(0, 240, 255, 0.15)' : 'none', position: 'relative' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🖥️</div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: isActive ? '#00f0ff' : 'var(--text-primary)' }}>{m.name}</h3>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                      มีรันบันทึกข้อมูลทั้งหมด: <strong>{machineJobs.length} รอบ</strong>
+                    </p>
+                    
+                    <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                      <button
+                        className="replay-close-btn"
+                        style={{ 
+                          background: 'rgba(0, 240, 255, 0.1)', 
+                          borderColor: 'rgba(0, 240, 255, 0.2)', 
+                          color: '#00f0ff', 
+                          padding: '6px 12px',
+                          fontSize: '0.8rem',
+                          margin: 0
+                        }}
+                        onClick={() => {
+                          setCurrentMachineId(m.id);
+                          if (machineJobs.length > 0) {
+                            setCurrentJobId(machineJobs[0].id);
+                          } else {
+                            setCurrentJobId(null);
+                          }
+                          setCurrentAppView('monitoring');
+                          setActiveTab('dashboard');
+                        }}
+                      >
+                        เปิดบอร์ดข้อมูล
+                      </button>
+                      <button
+                        className="export-btn"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', margin: 0 }}
+                        onClick={() => {
+                          const newName = prompt("แก้ไขชื่อเครื่องมือ:", m.name);
+                          if (newName && newName.trim() && newName.trim() !== m.name) {
+                            fetch(`/api/machines/${m.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ name: newName.trim() })
+                            }).then(res => res.ok && res.json()).then(data => data && applyDBUpdate(data));
+                          }
+                        }}
+                      >
+                        แก้ไขชื่อ
+                      </button>
+                      {machines.length > 1 && (
+                        <button
+                          className="delete-row-btn"
+                          style={{ margin: 0, padding: '6px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => {
+                            if (window.confirm(`คุณแน่ใจว่าต้องการลบเครื่องมือ "${m.name}"? รอบข้อมูลและประวัติรันทั้งหมดจะสูญหายอย่างถาวร!`)) {
+                              fetch(`/api/machines/${m.id}`, {
+                                method: 'DELETE'
+                              }).then(res => res.ok && res.json()).then(data => {
+                                if (data) {
+                                  applyDBUpdate(data);
+                                  if (currentMachineId === m.id) {
+                                    setCurrentMachineId(data.machines[0]?.id || null);
+                                  }
+                                }
+                              });
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : currentAppView === 'sessions' ? (
+          /* SESSIONS LIST VIEW */
           <div className="combined-jobs-view">
             <header className="dashboard-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h2>ข้อมูลงานรวม (Combined Session Analyzer)</h2>
+                <h2>จัดการรอบรันทั้งหมด (Sessions Management)</h2>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-                  รายงานสรุปรอบการรันและเปรียบเทียบแนวโน้มระหว่างรอบการทดลองทั้งหมด
+                  รายงานสรุป ค้นหา ดาวน์โหลดเอกสาร เปรียบเทียบกราฟ และเริ่มเปิดรันข้อมูลใหม่
                 </p>
               </div>
 
-              {/* Tab Selector */}
-              <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(15, 23, 42, 0.3)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <button 
-                  className={`nav-tab ${combinedActiveTab === 'list' ? 'active' : ''}`}
-                  onClick={() => setCombinedActiveTab('list')}
-                  style={{ padding: '6px 16px', fontSize: '0.85rem' }}
+              {/* Header Actions */}
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  className="submit-btn"
+                  style={{
+                    margin: 0,
+                    padding: '8px 16px',
+                    fontSize: '0.9rem',
+                    background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  onClick={() => {
+                    setNewSessionName(`Session ${jobs.length + 1}`);
+                    setNewSessionMachineId(currentMachineId || machines[0]?.id);
+                    setNewSessionCustomerId('');
+                    setNewSessionCustomerName('');
+                    setNewSessionCustomerEmail('');
+                    setNewSessionExpiryHours(0);
+                    setShowWizardSuccess(false);
+                    setShowAddSessionModal(true);
+                  }}
                 >
-                  ตารางงานทั้งหมด ({jobs.length})
+                  <PlusCircle size={18} />
+                  ตั้งค่าเปิดงานใหม่ (Setup New Run)
                 </button>
-                <button 
-                  className={`nav-tab ${combinedActiveTab === 'compare' ? 'active' : ''}`}
-                  onClick={() => setCombinedActiveTab('compare')}
-                  style={{ padding: '6px 16px', fontSize: '0.85rem' }}
-                >
-                  วิเคราะห์เปรียบเทียบกราฟ
-                </button>
+
+                {/* Tab Selector */}
+                <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(15, 23, 42, 0.3)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <button 
+                    className={`nav-tab ${combinedActiveTab === 'list' ? 'active' : ''}`}
+                    onClick={() => setCombinedActiveTab('list')}
+                    style={{ padding: '6px 16px', fontSize: '0.85rem' }}
+                  >
+                    ตารางงานทั้งหมด ({jobs.length})
+                  </button>
+                  <button 
+                    className={`nav-tab ${combinedActiveTab === 'compare' ? 'active' : ''}`}
+                    onClick={() => setCombinedActiveTab('compare')}
+                    style={{ padding: '6px 16px', fontSize: '0.85rem' }}
+                  >
+                    วิเคราะห์เปรียบเทียบกราฟ
+                  </button>
+                </div>
               </div>
             </header>
 
@@ -2305,29 +2401,75 @@ function App() {
         ) : (
           /* MONITORING VIEW */
           <>
-            <header className="dashboard-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                <h2>{currentJob?.name || 'No Session Selected'}</h2>
+            <header className="dashboard-header" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                {/* Instrument Selector Dropdown */}
+                {userRole === 'admin' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>เครื่องมือ:</span>
+                    <select
+                      value={currentMachineId || ''}
+                      onChange={(e) => {
+                        const mId = e.target.value;
+                        setCurrentMachineId(mId);
+                        const machineJobs = jobs.filter(j => j.machineId === mId);
+                        if (machineJobs.length > 0) {
+                          setCurrentJobId(machineJobs[0].id);
+                        } else {
+                          setCurrentJobId(null);
+                        }
+                      }}
+                      className="machine-dropdown"
+                      style={{ padding: '6px 12px', height: '36px', width: 'auto', minWidth: '150px', backgroundImage: 'none', margin: 0 }}
+                    >
+                      {machines.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>🖥️ {currentMachine?.name}</h2>
+                )}
+
+                {/* Session Selector Dropdown */}
+                {userRole === 'admin' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>รอบรัน:</span>
+                    <select
+                      value={currentJobId || ''}
+                      onChange={(e) => setCurrentJobId(e.target.value)}
+                      className="machine-dropdown"
+                      style={{ padding: '6px 12px', height: '36px', width: 'auto', minWidth: '150px', backgroundImage: 'none', margin: 0 }}
+                      disabled={jobsForMachine.length === 0}
+                    >
+                      {jobsForMachine.map(j => (
+                        <option key={j.id} value={j.id}>{j.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--accent-blue)' }}>📁 {currentJob?.name}</h2>
+                )}
                 
                 {currentJob && (
-                  <div className="nav-tabs">
+                  <div className="nav-tabs" style={{ margin: 0 }}>
                     <button 
                       className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
                       onClick={() => setActiveTab('dashboard')}
                     >
-                      <LayoutDashboard size={18} /> Dashboard
+                      <LayoutDashboard size={16} /> Dashboard
                     </button>
                     <button 
                       className={`nav-tab ${activeTab === 'combined' ? 'active' : ''}`}
                       onClick={() => setActiveTab('combined')}
                     >
-                      <ChartIcon size={18} /> Combined Graph
+                      <ChartIcon size={16} /> Graph
                     </button>
                     <button 
                       className={`nav-tab ${activeTab === 'table' ? 'active' : ''}`}
                       onClick={() => setActiveTab('table')}
                     >
-                      <TableIcon size={18} /> Data Table
+                      <TableIcon size={16} /> Table
                     </button>
                   </div>
                 )}
@@ -3337,20 +3479,301 @@ function App() {
         </div>
       )}
 
-      {/* Glassmorphic Add New Session Modal */}
+      {/* Glassmorphic Add New Session Modal / Unified Run Setup Wizard */}
       {showAddSessionModal && (
-        <div className="modal-backdrop" onClick={() => setShowAddSessionModal(false)}>
+        <div className="modal-backdrop" onClick={() => { if (!showWizardSuccess) setShowAddSessionModal(false); }}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             
             {/* Modal Header */}
             <div className="modal-header">
               <h3>
                 <FolderPlus size={22} color="var(--accent-blue)" />
-                สร้างรอบบันทึกข้อมูลใหม่ (Add New Session)
+                {showWizardSuccess ? 'ตั้งค่าการบันทึกข้อมูลและลูกค้าสำเร็จ' : 'ตั้งค่าเปิดงานใหม่ & จับคู่ลูกค้า (New Run Setup)'}
+              </h3>
+              {!showWizardSuccess && (
+                <button 
+                  className="modal-close-btn"
+                  onClick={() => setShowAddSessionModal(false)}
+                  title="ปิด"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            {showWizardSuccess && wizardSuccessJobId ? (
+              /* Success Screen */
+              (() => {
+                const job = jobs.find(j => j.id === wizardSuccessJobId);
+                const machine = machines.find(m => m.id === job?.machineId);
+                const assignedCustomer = customers.find(c => c.machineId === job?.machineId);
+                const loginUrl = `${window.location.origin}/?job=${job?.id}`;
+                const expiryInfoText = job?.expiresAt ? new Date(job.expiresAt).toLocaleString('th-TH') : "ไม่มีวันหมดอายุ";
+                const customerName = assignedCustomer ? assignedCustomer.companyName : "[ชื่อลูกค้า]";
+                const invitationText = `เรียนคุณ ${customerName},\n\nทางแล็บขอส่งลิงก์สำหรับเข้าดูข้อมูลไบโอโพรเซสรอบรัน "${job?.name || ''}" (${machine?.name || ''}) แบบเรียลไทม์\n\nลิงก์เข้าสู่ระบบ: ${loginUrl}\nวันหมดอายุ: ${expiryInfoText}\n\nขอบคุณค่ะ/ครับ\nDBMS System`;
+
+                return (
+                  <div className="modal-body">
+                    <div style={{ textAlign: 'center', margin: '1rem 0' }}>
+                      <span style={{ fontSize: '3rem' }}>🚀</span>
+                      <h4 style={{ fontSize: '1.25rem', color: 'var(--accent-green)', fontWeight: 700, marginTop: '8px' }}>ตั้งค่าเปิดรอบรันข้อมูลสำเร็จ!</h4>
+                    </div>
+
+                    <div className="modal-info-box">
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>รอบรัน (Session): </span>
+                        <strong style={{ color: 'var(--accent-blue)' }}>{job?.name}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-secondary)' }}>เครื่องมือ: </span>
+                        <strong>{machine?.name || '-'}</strong>
+                      </div>
+                    </div>
+
+                    {/* Expiry Label */}
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      ⏱️ สิทธิ์การเข้าใช้งานหมดอายุวันที่: <strong style={{ color: 'var(--accent-yellow)' }}>{expiryInfoText}</strong>
+                    </div>
+
+                    {/* Share Link */}
+                    <div>
+                      <label className="modal-label">🔗 ลิงก์เข้าใช้งานตรงสำหรับลูกค้า (Direct Share Link)</label>
+                      <div className="modal-input-row">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={loginUrl} 
+                          className="modal-input"
+                          onClick={(e) => e.target.select()}
+                        />
+                        <button 
+                          className="submit-btn" 
+                          style={{ margin: 0, padding: '0 16px', background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)' }}
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(loginUrl);
+                            alert("คัดลอกลิงก์สำเร็จ!");
+                          }}
+                        >
+                          คัดลอกลิงก์
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Email Invitation text */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label className="modal-label" style={{ margin: 0 }}>📋 ข้อความคำเชิญสำหรับลูกค้า</label>
+                        <button
+                          type="button"
+                          className="submit-btn"
+                          style={{ 
+                            margin: 0, 
+                            padding: '4px 8px', 
+                            fontSize: '0.75rem', 
+                            background: 'rgba(16, 185, 129, 0.1)', 
+                            border: '1px solid rgba(16, 185, 129, 0.3)', 
+                            color: 'var(--accent-green)', 
+                            borderRadius: '4px',
+                            height: 'auto',
+                            fontWeight: 600
+                          }}
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(invitationText);
+                            alert("คัดลอกข้อความคำเชิญสำเร็จ!");
+                          }}
+                        >
+                          📋 คัดลอกคำเชิญ
+                        </button>
+                      </div>
+                      <div className="modal-preview-box">
+                        {invitationText}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                      <button 
+                        className="submit-btn" 
+                        style={{ background: 'linear-gradient(135deg, var(--accent-green), #059669)', border: 'none', color: '#fff', padding: '10px 24px', fontSize: '0.95rem', margin: 0 }}
+                        onClick={() => {
+                          setCurrentMachineId(job.machineId);
+                          setCurrentJobId(job.id);
+                          setCurrentAppView('monitoring');
+                          setActiveTab('dashboard');
+                          setShowAddSessionModal(false);
+                          setShowWizardSuccess(false);
+                          setWizardSuccessJobId(null);
+                        }}
+                      >
+                        เริ่มเข้าดูแดชบอร์ดข้อมูล (Open Dashboard)
+                      </button>
+                    </div>
+
+                  </div>
+                );
+              })()
+            ) : (
+              /* Setup Form */
+              <form onSubmit={submitNewJob} className="modal-body" style={{ margin: 0 }}>
+                
+                {/* Step 1: Run Config */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label className="modal-label">🖥️ เครื่องมือ / อุปกรณ์ *</label>
+                    <select 
+                      value={newSessionMachineId} 
+                      onChange={(e) => setNewSessionMachineId(e.target.value)}
+                      className="modal-input"
+                      style={{ width: '100%', padding: '10px', height: '42px', backgroundImage: 'none' }}
+                      required
+                    >
+                      {machines.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="modal-label">📝 ชื่อรอบบันทึกข้อมูล *</label>
+                    <input 
+                      type="text" 
+                      value={newSessionName} 
+                      onChange={(e) => setNewSessionName(e.target.value)}
+                      placeholder="เช่น Session 1 หรือ Batch-01" 
+                      className="modal-input"
+                      required
+                      style={{ width: '100%', padding: '10px' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Step 2: Customer Assignment */}
+                <div className="modal-section">
+                  <label className="modal-label">👥 ระบุลูกค้าผู้เข้าใช้งาน (Customer Assignment)</label>
+                  <select 
+                    value={newSessionCustomerId} 
+                    onChange={(e) => {
+                      setNewSessionCustomerId(e.target.value);
+                      if (e.target.value !== 'ADD_NEW') {
+                        setNewSessionCustomerName('');
+                        setNewSessionCustomerEmail('');
+                      }
+                    }}
+                    className="modal-input"
+                    style={{ width: '100%', padding: '10px', height: '42px', backgroundImage: 'none', marginBottom: newSessionCustomerId === 'ADD_NEW' ? '12px' : '0' }}
+                  >
+                    <option value="">-- ไม่ระบุลูกค้า (No Customer) --</option>
+                    <option value="ADD_NEW">➕ เพิ่มลูกค้าใหม่ (Create New Customer)</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>{c.companyName} ({getMachineName(c.machineId)})</option>
+                    ))}
+                  </select>
+
+                  {/* Add New Customer Fields */}
+                  {newSessionCustomerId === 'ADD_NEW' && (
+                    <div style={{ display: 'flex', gap: '1rem', background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>ชื่อบริษัท/ลูกค้า *</span>
+                        <input 
+                          type="text" 
+                          value={newSessionCustomerName} 
+                          onChange={(e) => setNewSessionCustomerName(e.target.value)} 
+                          placeholder="ชื่อบริษัท/ชื่อลูกค้า" 
+                          className="modal-input" 
+                          required 
+                          style={{ width: '100%', marginTop: '4px', height: '36px', padding: '6px 10px' }} 
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>อีเมล (Email)</span>
+                        <input 
+                          type="email" 
+                          value={newSessionCustomerEmail} 
+                          onChange={(e) => setNewSessionCustomerEmail(e.target.value)} 
+                          placeholder="customer@example.com" 
+                          className="modal-input" 
+                          style={{ width: '100%', marginTop: '4px', height: '36px', padding: '6px 10px' }} 
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 3: Link Expiration */}
+                <div className="modal-section">
+                  <label className="modal-label">⏱️ กำหนดวันหมดอายุลิงก์แชร์ลูกค้า (Link Expiration)</label>
+                  <div className="modal-preset-row" style={{ marginBottom: '4px' }}>
+                    {[
+                      { label: '24 ชม. (1 วัน)', value: 24 },
+                      { label: '72 ชม. (3 วัน)', value: 72 },
+                      { label: '168 ชม. (7 วัน)', value: 168 },
+                      { label: 'ไม่จำกัด (Unlimited)', value: 0 }
+                    ].map(preset => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        className="modal-preset-btn"
+                        style={{
+                          border: newSessionExpiryHours === preset.value ? '1px solid var(--accent-blue)' : '1px solid var(--border-color)',
+                          background: newSessionExpiryHours === preset.value ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                          fontWeight: newSessionExpiryHours === preset.value ? 700 : 'normal',
+                          color: newSessionExpiryHours === preset.value ? '#ffffff' : 'var(--text-primary)'
+                        }}
+                        onClick={() => setNewSessionExpiryHours(preset.value)}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                    
+                    {/* Expiry info text */}
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '10px' }}>
+                      {newSessionExpiryHours > 0 
+                        ? `(หมดอายุอีกใน ${newSessionExpiryHours} ชม.)` 
+                        : '(สามารถเข้าดูได้ตลอดเวลา)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                  <button 
+                    type="button" 
+                    className="submit-btn" 
+                    style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', margin: 0 }}
+                    onClick={() => setShowAddSessionModal(false)}
+                  >
+                    ยกเลิก (Cancel)
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="submit-btn" 
+                    style={{ background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)', border: 'none', color: '#fff', margin: 0 }}
+                  >
+                    สร้างและบันทึกข้อมูล (Create & Setup)
+                  </button>
+                </div>
+
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Glassmorphic Add New Instrument Modal */}
+      {showAddMachineModal && (
+        <div className="modal-backdrop" onClick={() => setShowAddMachineModal(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Modal Header */}
+            <div className="modal-header">
+              <h3>
+                <Cpu size={22} color="var(--accent-blue)" />
+                เพิ่มเครื่องมือ / อุปกรณ์ใหม่ (Add Instrument)
               </h3>
               <button 
                 className="modal-close-btn"
-                onClick={() => setShowAddSessionModal(false)}
+                onClick={() => setShowAddMachineModal(false)}
                 title="ปิด"
               >
                 <X size={20} />
@@ -3358,31 +3781,15 @@ function App() {
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={submitNewJob} className="modal-body" style={{ margin: 0 }}>
+            <form onSubmit={submitNewMachine} className="modal-body" style={{ margin: 0 }}>
               
-              {/* Instrument Selection */}
               <div>
-                <label className="modal-label">🖥️ เครื่องมือ / อุปกรณ์ (Instrument / Machine)</label>
-                <select 
-                  value={newSessionMachineId} 
-                  onChange={(e) => setNewSessionMachineId(e.target.value)}
-                  className="modal-input"
-                  style={{ width: '100%', padding: '10px', height: '42px', backgroundImage: 'none' }}
-                >
-                  {machines.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Session Name Input */}
-              <div>
-                <label className="modal-label">📝 ชื่อรอบบันทึกข้อมูล (Session Name)</label>
+                <label className="modal-label">🖥️ ชื่อเครื่องมือ / bioreactor เครื่องใหม่ *</label>
                 <input 
                   type="text" 
-                  value={newSessionName} 
-                  onChange={(e) => setNewSessionName(e.target.value)}
-                  placeholder="เช่น Session 1 หรือ Batch-01" 
+                  value={newMachineName} 
+                  onChange={(e) => setNewMachineName(e.target.value)}
+                  placeholder="เช่น Bioreactor 2 หรือ Fermenter 20L" 
                   className="modal-input"
                   required
                   style={{ width: '100%', padding: '10px' }}
@@ -3395,16 +3802,16 @@ function App() {
                   type="button" 
                   className="submit-btn" 
                   style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', margin: 0 }}
-                  onClick={() => setShowAddSessionModal(false)}
+                  onClick={() => setShowAddMachineModal(false)}
                 >
-                  ยกเลิก (Cancel)
+                  ยกเลิก
                 </button>
                 <button 
                   type="submit" 
                   className="submit-btn" 
                   style={{ background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)', border: 'none', color: '#fff', margin: 0 }}
                 >
-                  สร้างรอบบันทึก (Create)
+                  สร้างเครื่องมือใหม่
                 </button>
               </div>
 
