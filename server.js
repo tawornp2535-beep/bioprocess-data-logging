@@ -139,6 +139,7 @@ if (SERVICE_ACCOUNT_JSON) {
 const MACHINES_COL = 'machines';
 const JOBS_COL = 'jobs';
 const CUSTOMERS_COL = 'customers';
+const FEEDBACKS_COL = 'feedbacks';
 
 // Get all documents from a Firestore collection
 const getCollection = async (collectionName) => {
@@ -158,21 +159,24 @@ const readLocalDB = () => {
           id: 'job-initial',
           machineId: 'm1',
           name: 'Default Session',
-          createdAt: new Date().toLocaleString(),
+          createdAt: new Date().toISOString(),
           data: []
         }
       ],
-      customers: []
+      customers: [],
+      feedbacks: []
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf-8');
     return defaultData;
   }
   try {
     const content = fs.readFileSync(DB_FILE, 'utf-8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    if (!parsed.feedbacks) parsed.feedbacks = [];
+    return parsed;
   } catch (e) {
     console.error('Error reading db.json, returning empty template:', e);
-    return { machines: [], jobs: [], customers: [] };
+    return { machines: [], jobs: [], customers: [], feedbacks: [] };
   }
 };
 
@@ -185,41 +189,75 @@ const writeLocalDB = (data) => {
 };
 
 // ──────────────────────────────────────────────────────────
-// Timezone Migration Helper (Fixes old UTC-parsed timestamps)
+// Timezone Migration Helper (Fixes old UTC-parsed timestamps & mismatched date/time fields)
 // ──────────────────────────────────────────────────────────
 const migrateDataPoints = (jobs) => {
   let migrated = false;
   jobs.forEach(job => {
     if (job.data && Array.isArray(job.data)) {
       job.data.forEach(row => {
-        if (row.date && row.time && row.timestamp) {
-          // Extract HH:MM from ISO timestamp (e.g., "2026-06-16T13:40:00.000Z" -> "13:40")
-          const tsTime = row.timestamp.slice(11, 16); 
-          const pad2 = (n) => String(n).padStart(2, '0');
-          
-          let cleanTime = '';
-          const m = row.time.match(/(\d{1,2}):(\d{2})/);
-          if (m) {
-            cleanTime = `${pad2(parseInt(m[1], 10))}:${pad2(parseInt(m[2], 10))}`;
-          }
+        if (row.timestamp) {
+          const dt = new Date(row.timestamp);
+          if (!isNaN(dt.getTime())) {
+            // Get correct ICT date and time (UTC+7)
+            const ictTime = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+            const correctDate = ictTime.toISOString().slice(0, 10);
+            
+            const pad2 = (n) => String(n).padStart(2, '0');
+            const correctTime = `${pad2(ictTime.getUTCHours())}:${pad2(ictTime.getUTCMinutes())}`;
 
-          // If the stored ISO UTC time exactly matches the local HH:MM, it was parsed incorrectly as UTC
-          if (cleanTime && tsTime === cleanTime) {
-            const dateParts = row.date.split('-');
-            const timeParts = cleanTime.split(':');
-            if (dateParts.length === 3 && timeParts.length >= 2) {
-              const year = parseInt(dateParts[0], 10);
-              const month = parseInt(dateParts[1], 10) - 1;
-              const day = parseInt(dateParts[2], 10);
-              const hours = parseInt(timeParts[0], 10);
-              const minutes = parseInt(timeParts[1], 10);
-              // Construct correctly in ICT (UTC+7) local time
-              const utcMs = Date.UTC(year, month, day, hours, minutes, 0) - (7 * 60 * 60 * 1000);
-              const localDate = new Date(utcMs);
-              if (!isNaN(localDate.getTime())) {
-                row.timestamp = localDate.toISOString();
-                migrated = true;
+            let cleanTime = '';
+            if (row.time) {
+              const m = row.time.match(/(\d{1,2}):(\d{2})/);
+              if (m) {
+                cleanTime = `${pad2(parseInt(m[1], 10))}:${pad2(parseInt(m[2], 10))}`;
               }
+            }
+
+            const tsTime = row.timestamp.slice(11, 16);
+            if (cleanTime && tsTime === cleanTime) {
+              // Old UTC-parsed timestamp bug detected! Migrate timestamp first.
+              const dateParts = (row.date || correctDate).split('-');
+              const timeParts = cleanTime.split(':');
+              if (dateParts.length === 3 && timeParts.length >= 2) {
+                const year = parseInt(dateParts[0], 10);
+                const month = parseInt(dateParts[1], 10) - 1;
+                const day = parseInt(dateParts[2], 10);
+                const hours = parseInt(timeParts[0], 10);
+                const minutes = parseInt(timeParts[1], 10);
+                const utcMs = Date.UTC(year, month, day, hours, minutes, 0) - (7 * 60 * 60 * 1000);
+                const localDate = new Date(utcMs);
+                if (!isNaN(localDate.getTime())) {
+                  row.timestamp = localDate.toISOString();
+                  migrated = true;
+                  
+                  // Re-evaluate correctDate and correctTime for the updated timestamp
+                  const updatedDt = new Date(row.timestamp);
+                  const updatedIctTime = new Date(updatedDt.getTime() + 7 * 60 * 60 * 1000);
+                  const updatedDate = updatedIctTime.toISOString().slice(0, 10);
+                  const updatedTime = `${pad2(updatedIctTime.getUTCHours())}:${pad2(updatedIctTime.getUTCMinutes())}`;
+                  
+                  if (row.date !== updatedDate) {
+                    row.date = updatedDate;
+                    migrated = true;
+                  }
+                  if (row.time !== updatedTime) {
+                    row.time = updatedTime;
+                    migrated = true;
+                  }
+                  return; // Go to next row
+                }
+              }
+            }
+
+            // If timestamp is fine, but stored date/time are incorrect
+            if (row.date !== correctDate) {
+              row.date = correctDate;
+              migrated = true;
+            }
+            if (row.time !== correctTime) {
+              row.time = correctTime;
+              migrated = true;
             }
           }
         }
@@ -238,6 +276,7 @@ const getDB = async () => {
       let machines = await getCollection(MACHINES_COL);
       let jobs = await getCollection(JOBS_COL);
       let customers = await getCollection(CUSTOMERS_COL);
+      let feedbacks = await getCollection(FEEDBACKS_COL);
 
       // Seed cloud database if empty
       if (machines.length === 0) {
@@ -246,7 +285,7 @@ const getDB = async () => {
           id: 'job-initial',
           machineId: 'm1',
           name: 'Default Session',
-          createdAt: new Date().toLocaleString(),
+          createdAt: new Date().toISOString(),
           data: []
         };
         await db.collection(MACHINES_COL).doc('m1').set(defaultMachine);
@@ -268,7 +307,7 @@ const getDB = async () => {
         console.log('✅ Firestore timezone migration completed successfully.');
       }
 
-      return { machines, jobs, customers };
+      return { machines, jobs, customers, feedbacks };
     } catch (e) {
       console.error('Error reading Firestore, falling back to local file:', e);
       return readLocalDB();
@@ -336,6 +375,62 @@ const saveSettings = async (settings) => {
 
 // In-memory active users tracker
 const activeUsers = {};
+
+// ── Feedbacks ─────────────────────────────────────────────
+app.post('/api/feedbacks', async (req, res) => {
+  const { jobId, rating, comment } = req.body;
+  if (!jobId || !rating) {
+    return res.status(400).json({ error: 'Job ID and rating are required' });
+  }
+
+  const dbData = await getDB();
+  const job = dbData.jobs.find(j => j.id === jobId);
+  const jobName = job ? job.name : 'Unknown Session';
+
+  const newFeedback = {
+    id: 'fb-' + Date.now(),
+    jobId,
+    jobName,
+    rating: parseInt(rating, 10) || 5,
+    comment: comment ? String(comment).trim() : '',
+    createdAt: new Date().toISOString()
+  };
+
+  if (isCloud) {
+    try {
+      await db.collection(FEEDBACKS_COL).doc(newFeedback.id).set(newFeedback);
+    } catch (e) {
+      console.error('Firestore error saving feedback:', e);
+    }
+  } else {
+    const localDB = readLocalDB();
+    if (!localDB.feedbacks) localDB.feedbacks = [];
+    localDB.feedbacks.push(newFeedback);
+    writeLocalDB(localDB);
+  }
+
+  res.json(await getDB());
+});
+
+app.delete('/api/feedbacks/:id', async (req, res) => {
+  const { id } = req.params;
+
+  if (isCloud) {
+    try {
+      await db.collection(FEEDBACKS_COL).doc(id).delete();
+    } catch (e) {
+      console.error('Firestore error deleting feedback:', e);
+    }
+  } else {
+    const localDB = readLocalDB();
+    if (localDB.feedbacks) {
+      localDB.feedbacks = localDB.feedbacks.filter(f => f.id !== id);
+      writeLocalDB(localDB);
+    }
+  }
+
+  res.json(await getDB());
+});
 
 app.get('/api/db', async (req, res) => {
   const { clientId, role, machineId, jobId } = req.query;
@@ -488,7 +583,7 @@ app.post('/api/jobs', async (req, res) => {
     id: 'job-' + Date.now(),
     machineId,
     name: name.trim(),
-    createdAt: new Date().toLocaleString(),
+    createdAt: new Date().toISOString(),
     data: []
   };
 
@@ -562,10 +657,33 @@ app.post('/api/jobs/:id/data', async (req, res) => {
 
   console.log(`POST /api/jobs/${id}/data payload:`, req.body);
 
+  const timestamp = req.body.timestamp || normalizeDateTime(req.body.date, req.body.time) || normalizeDateTime(undefined, req.body.time) || new Date().toISOString();
+  let date = null;
+  let time = null;
+  
+  try {
+    const dt = new Date(timestamp);
+    if (!isNaN(dt.getTime())) {
+      const ictTime = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+      date = ictTime.toISOString().slice(0, 10);
+      const pad2 = (n) => String(n).padStart(2, '0');
+      time = `${pad2(ictTime.getUTCHours())}:${pad2(ictTime.getUTCMinutes())}`;
+    }
+  } catch (e) {
+    console.error('Error deriving ICT date/time from timestamp:', e);
+  }
+
+  if (!date) {
+    const ictNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    date = ictNow.toISOString().slice(0, 10);
+    const pad2 = (n) => String(n).padStart(2, '0');
+    time = `${pad2(ictNow.getUTCHours())}:${pad2(ictNow.getUTCMinutes())}`;
+  }
+
   const newDataPoint = {
-    timestamp: req.body.timestamp || normalizeDateTime(req.body.date, req.body.time) || normalizeDateTime(undefined, req.body.time) || new Date().toISOString(),
-    date: null,
-    time: normalizeTimeHHMM(req.body.time) || normalizeTimeHHMM(new Date()),
+    timestamp,
+    date,
+    time,
     temp_set: parseFloat(temp_set) || 0,
     temp_read: parseFloat(temp_read) || 0,
     ph_set: parseFloat(ph_set) || 0,
@@ -576,20 +694,14 @@ app.post('/api/jobs/:id/data', async (req, res) => {
     agit_read: parseFloat(agit_read) || 0,
     air_set: parseFloat(air_set) || 0,
     air_read: parseFloat(air_read) || 0,
+    level_set: req.body.level_set !== undefined && req.body.level_set !== null ? parseFloat(req.body.level_set) : null,
+    level_read: req.body.level_read !== undefined && req.body.level_read !== null ? parseFloat(req.body.level_read) : null,
+    air_out_set: req.body.air_out_set !== undefined && req.body.air_out_set !== null ? parseFloat(req.body.air_out_set) : null,
+    air_out_read: req.body.air_out_read !== undefined && req.body.air_out_read !== null ? parseFloat(req.body.air_out_read) : null,
+    heat_set: req.body.heat_set !== undefined && req.body.heat_set !== null ? parseFloat(req.body.heat_set) : null,
+    heat_read: req.body.heat_read !== undefined && req.body.heat_read !== null ? parseFloat(req.body.heat_read) : null,
     remark: remark || ''
   };
-
-  // Derive date from timestamp
-  try {
-    const dt = new Date(newDataPoint.timestamp);
-    if (!isNaN(dt.getTime())) {
-      newDataPoint.date = dt.toISOString().slice(0, 10);
-    } else {
-      newDataPoint.date = newDataPoint.timestamp ? String(newDataPoint.timestamp).slice(0, 10) : (new Date().toISOString().slice(0, 10));
-    }
-  } catch (e) {
-    newDataPoint.date = new Date().toISOString().slice(0, 10);
-  }
 
   if (isCloud) {
     try {
@@ -654,10 +766,33 @@ app.put('/api/jobs/:id/data/:index', async (req, res) => {
     return res.status(400).json({ error: 'Invalid index' });
   }
 
+  const timestamp = updatedPoint.timestamp || normalizeDateTime(updatedPoint.date, updatedPoint.time) || new Date().toISOString();
+  let date = null;
+  let time = null;
+
+  try {
+    const dt = new Date(timestamp);
+    if (!isNaN(dt.getTime())) {
+      const ictTime = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+      date = ictTime.toISOString().slice(0, 10);
+      const pad2 = (n) => String(n).padStart(2, '0');
+      time = `${pad2(ictTime.getUTCHours())}:${pad2(ictTime.getUTCMinutes())}`;
+    }
+  } catch (e) {
+    console.error('Error deriving ICT date/time in PUT:', e);
+  }
+
+  if (!date) {
+    const ictNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    date = ictNow.toISOString().slice(0, 10);
+    const pad2 = (n) => String(n).padStart(2, '0');
+    time = `${pad2(ictNow.getUTCHours())}:${pad2(ictNow.getUTCMinutes())}`;
+  }
+
   const cleanPoint = {
-    timestamp: updatedPoint.timestamp || normalizeDateTime(updatedPoint.date, updatedPoint.time) || new Date().toISOString(),
-    date: updatedPoint.date || new Date().toISOString().slice(0, 10),
-    time: normalizeTimeHHMM(updatedPoint.time) || normalizeTimeHHMM(new Date()),
+    timestamp,
+    date,
+    time,
     temp_set: parseFloat(updatedPoint.temp_set) || 0,
     temp_read: parseFloat(updatedPoint.temp_read) || 0,
     ph_set: parseFloat(updatedPoint.ph_set) || 0,
@@ -668,6 +803,12 @@ app.put('/api/jobs/:id/data/:index', async (req, res) => {
     agit_read: parseFloat(updatedPoint.agit_read) || 0,
     air_set: parseFloat(updatedPoint.air_set) || 0,
     air_read: parseFloat(updatedPoint.air_read) || 0,
+    level_set: updatedPoint.level_set !== undefined && updatedPoint.level_set !== null ? parseFloat(updatedPoint.level_set) : null,
+    level_read: updatedPoint.level_read !== undefined && updatedPoint.level_read !== null ? parseFloat(updatedPoint.level_read) : null,
+    air_out_set: updatedPoint.air_out_set !== undefined && updatedPoint.air_out_set !== null ? parseFloat(updatedPoint.air_out_set) : null,
+    air_out_read: updatedPoint.air_out_read !== undefined && updatedPoint.air_out_read !== null ? parseFloat(updatedPoint.air_out_read) : null,
+    heat_set: updatedPoint.heat_set !== undefined && updatedPoint.heat_set !== null ? parseFloat(updatedPoint.heat_set) : null,
+    heat_read: updatedPoint.heat_read !== undefined && updatedPoint.heat_read !== null ? parseFloat(updatedPoint.heat_read) : null,
     remark: updatedPoint.remark || ''
   };
 
@@ -730,7 +871,7 @@ app.post('/api/customers', async (req, res) => {
     companyName: companyName.trim(),
     machineId,
     email: email && typeof email === 'string' && email.trim() !== '' ? email.trim() : undefined,
-    createdAt: new Date().toLocaleDateString()
+    createdAt: new Date().toISOString()
   };
 
   if (isCloud) {

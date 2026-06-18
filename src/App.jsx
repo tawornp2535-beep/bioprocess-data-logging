@@ -8,7 +8,7 @@ import {
   Download, LayoutDashboard, LineChart as ChartIcon, FolderPlus, Trash2, FolderOpen,
   Table as TableIcon, Users, Activity as ActivityIcon, Edit3,
   ChevronDown, ChevronUp, ChevronRight, Settings, LogOut, Cpu, Database, Folder,
-  Menu, X, Check, Play, Pause, RotateCcw
+  Menu, X, Check, Play, Pause, RotateCcw, Star, MessageSquare
 } from 'lucide-react';
 import './index.css';
 import './form.css';
@@ -65,10 +65,21 @@ const getElapsedHours = (job, dataPointTimestamp) => {
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const rowData = payload[0].payload;
-    const hrText = rowData && rowData.cultureHour !== undefined ? ` (ชั่วโมงที่ ${rowData.cultureHour})` : '';
+    let titleText = label;
+    if (rowData) {
+      const timeVal = rowData.time || (rowData.timestamp ? new Date(rowData.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '');
+      const hourVal = rowData.cultureHour !== undefined ? rowData.cultureHour : '';
+      if (hourVal !== '' && timeVal !== '') {
+        titleText = `ชั่วโมงที่ ${hourVal} (เวลา ${timeVal})`;
+      } else if (hourVal !== '') {
+        titleText = `ชั่วโมงที่ ${hourVal}`;
+      } else if (timeVal !== '') {
+        titleText = `เวลา ${timeVal}`;
+      }
+    }
     return (
       <div className="custom-tooltip">
-        <p className="custom-tooltip-label">{label}{hrText}</p>
+        <p className="custom-tooltip-label">{titleText}</p>
         {payload.map((entry, index) => (
           <p key={index} style={{ color: entry.color, margin: 0, fontSize: '14px', fontWeight: 600 }}>
             {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value || '-'}
@@ -80,13 +91,638 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// Initial defaults
+// BSTR Diagram Component
+const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying }) => {
+  if (!dataPoint) {
+    return (
+      <div className="glass-panel empty-state" style={{ height: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <h2>No Active Session or Data</h2>
+        <p>เลือกเซสชันที่มีข้อมูล หรือกดเริ่มเพิ่มข้อมูลใหม่ก่อน</p>
+      </div>
+    );
+  }
+
+  // Extract PV & SV
+  const temp_set = typeof dataPoint.temp_set === 'number' ? dataPoint.temp_set : 37.0;
+  const temp_read = typeof dataPoint.temp_read === 'number' ? dataPoint.temp_read : 37.0;
+  const ph_set = typeof dataPoint.ph_set === 'number' ? dataPoint.ph_set : 7.00;
+  const ph_read = typeof dataPoint.ph_read === 'number' ? dataPoint.ph_read : 7.00;
+  const do_set = typeof dataPoint.do_set === 'number' ? dataPoint.do_set : 60.0;
+  const do_read = typeof dataPoint.do_read === 'number' ? dataPoint.do_read : 60.0;
+  const agit_set = typeof dataPoint.agit_set === 'number' ? dataPoint.agit_set : 120.0;
+  const agit_read = typeof dataPoint.agit_read === 'number' ? dataPoint.agit_read : 120.0;
+  const air_set = typeof dataPoint.air_set === 'number' ? dataPoint.air_set : 2.0;
+  const air_read = typeof dataPoint.air_read === 'number' ? dataPoint.air_read : 2.0;
+
+  const level_set = typeof dataPoint.level_set === 'number' ? dataPoint.level_set : 65.0;
+  const level_read = typeof dataPoint.level_read === 'number' ? dataPoint.level_read : 65.0;
+  const air_out_set = typeof dataPoint.air_out_set === 'number' ? dataPoint.air_out_set : parseFloat((air_set * 0.96).toFixed(2));
+  const air_out_read = typeof dataPoint.air_out_read === 'number' ? dataPoint.air_out_read : parseFloat((air_read * 0.96).toFixed(2));
+  const heat_set = typeof dataPoint.heat_set === 'number' ? dataPoint.heat_set : 0.0;
+  const heat_read = typeof dataPoint.heat_read === 'number' ? dataPoint.heat_read : 0.0;
+
+  // Deriving timestamp formatting
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const formatTimeHHMM = (ts) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return ts;
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  };
+
+  const timestampStr = dataPoint.timestamp 
+    ? new Date(dataPoint.timestamp).toLocaleString('th-TH') 
+    : `${dataPoint.date || ''} ${dataPoint.time || ''}`;
+
+  // Helper to draw inline SVG sparklines
+  const renderSparkline = (data, key, strokeColor, minVal, maxVal) => {
+    const width = 120;
+    const height = 40;
+    if (!data || data.length === 0) {
+      return (
+        <div style={{ height, color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          No Data
+        </div>
+      );
+    }
+    
+    const points = data.map((d, i) => {
+      const val = d[key] !== undefined ? d[key] : 0;
+      const x = (i / Math.max(1, data.length - 1)) * width;
+      const range = maxVal - minVal;
+      const normalized = range > 0 ? (val - minVal) / range : 0.5;
+      const y = height - Math.min(height, Math.max(0, normalized * height));
+      return `${x},${y}`;
+    }).join(' ');
+
+    return (
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+        <polyline
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+      </svg>
+    );
+  };
+
+  // Extract start, mid, end culture hours for sparkline x-axis label
+  let startLabel = '0.0 ชม.';
+  let midLabel = '0.0 ชม.';
+  let endLabel = '0.0 ชม.';
+  if (chartData && chartData.length > 0) {
+    startLabel = `ชั่วโมงที่ ${chartData[0].cultureHour !== undefined ? chartData[0].cultureHour : 0}`;
+    const midIdx = Math.floor(chartData.length / 2);
+    midLabel = `ชั่วโมงที่ ${chartData[midIdx].cultureHour !== undefined ? chartData[midIdx].cultureHour : 0}`;
+    endLabel = `ชั่วโมงที่ ${chartData[chartData.length - 1].cultureHour !== undefined ? chartData[chartData.length - 1].cultureHour : 0}`;
+  }
+
+  // Impeller spinner speed calculation (CSS custom property)
+  const agitSpeedSec = agit_read > 0 ? Math.max(0.1, 60 / agit_read) : 0;
+  const agitSpinStyle = agitSpeedSec > 0 ? {
+    animation: `spin-blade ${agitSpeedSec}s linear infinite`,
+    transformOrigin: '150px 240px'
+  } : {};
+
+  // Bubbling animation styling based on Air Flow
+  const airBubbleCount = air_read > 0 ? Math.min(20, Math.floor(air_read * 3) + 2) : 0;
+
+  // Heating power color intensity mapping for the jacket glow
+  const jacketOpacity = Math.min(0.8, Math.max(0.1, heat_read / 100));
+
+  return (
+    <div className="bstr-diagram-dashboard">
+      {/* 1. DIAGRAM HEADER BAR */}
+      <div className="diagram-header-bar">
+        <div className="diagram-title-section">
+          <h2>BATCH STIRRED TANK REACTOR (BSTR)</h2>
+          <p className="diagram-subtitle">PROCESS MONITORING DIAGRAM</p>
+        </div>
+        <div className="diagram-datetime-box">
+          📅 {timestampStr}
+        </div>
+      </div>
+
+      {/* 2. MAIN HMI DISPLAY AREA */}
+      <div className="diagram-main-grid">
+        
+        {/* Left Side: Overlaid Sensor Callout Boxes */}
+        <div className="diagram-sensors-col">
+          
+          {/* pH Sensor Box */}
+          <div className="sensor-callout-card ph-sensor-callout">
+            <div className="sensor-callout-header">
+              <span className="sensor-icon">pH</span>
+              <span className="sensor-name">pH SENSOR</span>
+            </div>
+            <div className="sensor-lcd-display">
+              <span className="lcd-value">{ph_read.toFixed(2)}</span>
+              <span className="lcd-unit">pH</span>
+            </div>
+            <div className="sensor-sv-label">SV (Set): {ph_set.toFixed(2)}</div>
+          </div>
+
+          {/* DO Sensor Box */}
+          <div className="sensor-callout-card do-sensor-callout">
+            <div className="sensor-callout-header">
+              <span className="sensor-icon">DO</span>
+              <span className="sensor-name">DO SENSOR</span>
+            </div>
+            <div className="sensor-lcd-display green-lcd">
+              <span className="lcd-value">{Math.round(do_read)}</span>
+              <span className="lcd-unit">%</span>
+            </div>
+            <div className="sensor-sv-label">SV (Set): {Math.round(do_set)}%</div>
+          </div>
+
+          {/* Temperature Sensor Box */}
+          <div className="sensor-callout-card temp-sensor-callout">
+            <div className="sensor-callout-header">
+              <span className="sensor-icon">🌡️</span>
+              <span className="sensor-name">TEMP SENSOR</span>
+            </div>
+            <div className="sensor-lcd-display red-lcd">
+              <span className="lcd-value">{temp_read.toFixed(1)}</span>
+              <span className="lcd-unit">°C</span>
+            </div>
+            <div className="sensor-sv-label">SV (Set): {temp_set.toFixed(1)}°C</div>
+          </div>
+
+          {/* Level Sensor Box */}
+          <div className="sensor-callout-card level-sensor-callout">
+            <div className="sensor-callout-header">
+              <span className="sensor-icon">🎚️</span>
+              <span className="sensor-name">LEVEL SENSOR</span>
+            </div>
+            <div className="sensor-lcd-display blue-lcd">
+              <span className="lcd-value">{level_read.toFixed(1)}</span>
+              <span className="lcd-unit">%</span>
+            </div>
+            <div className="sensor-sv-label">SV (Set): {level_set.toFixed(1)}%</div>
+          </div>
+
+        </div>
+
+        {/* Center: Scalable Reactor SVG Vessel */}
+        <div className="diagram-reactor-vessel-col">
+          
+          <svg className="reactor-vessel-svg" viewBox="0 0 300 480" width="100%" height="100%">
+            <defs>
+              {/* Metallic Gradients */}
+              <linearGradient id="metal-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#4b5563" />
+                <stop offset="30%" stopColor="#9ca3af" />
+                <stop offset="50%" stopColor="#e5e7eb" />
+                <stop offset="70%" stopColor="#9ca3af" />
+                <stop offset="100%" stopColor="#4b5563" />
+              </linearGradient>
+              <linearGradient id="media-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.7" />
+                <stop offset="100%" stopColor="#d97706" stopOpacity="0.85" />
+              </linearGradient>
+              <linearGradient id="jacket-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="#f87171" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity="0.8" />
+              </linearGradient>
+            </defs>
+
+            {/* Heating Jacket Glow (Wrapper behind reactor) */}
+            {heat_read > 0 && (
+              <path
+                d="M 68 180 L 68 340 A 82 82 0 0 0 232 340 L 232 180 Z"
+                fill="url(#jacket-grad)"
+                filter="url(#glow)"
+                opacity={jacketOpacity}
+                stroke="#f87171"
+                strokeWidth="4"
+              />
+            )}
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="6" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+
+            {/* Main Stainless Tank outline */}
+            {/* Top curved head dome */}
+            <path d="M 70 120 A 80 50 0 0 1 230 120" fill="url(#metal-grad)" stroke="#1e293b" strokeWidth="2" />
+            {/* Reactor Body Cylindrical Wall */}
+            <rect x="70" y="120" width="160" height="230" fill="url(#metal-grad)" stroke="#1e293b" strokeWidth="2" />
+            {/* Bottom curved bottom dish */}
+            <path d="M 70 350 A 80 50 0 0 0 230 350" fill="url(#metal-grad)" stroke="#1e293b" strokeWidth="2" />
+
+            {/* Inside Liquid Media (Golden broth) */}
+            {level_read > 0 && (
+              <path
+                d={`M 74 350 L 74 ${360 - (level_read / 100) * 230} L 226 ${360 - (level_read / 100) * 230} L 226 350 A 76 46 0 0 1 74 350 Z`}
+                fill="url(#media-grad)"
+                stroke="#d97706"
+                strokeWidth="1"
+              />
+            )}
+
+            {/* Rising Bubbles (Simulated Gas Sparger) */}
+            {air_read > 0 && level_read > 20 && (
+              <g>
+                {[...Array(airBubbleCount)].map((_, i) => {
+                  const rx = 80 + (i * 13) % 140;
+                  const ry = 340 - (i * 17) % (Math.max(20, (level_read / 100) * 210));
+                  const rRadius = 1.5 + (i % 3);
+                  return (
+                    <circle
+                      key={i}
+                      cx={rx}
+                      cy={ry}
+                      r={rRadius}
+                      fill="#ffffff"
+                      opacity="0.6"
+                      className="rising-bubble-element"
+                      style={{
+                        animation: `bubble-rise ${1 + (i % 2)}s infinite ease-in-out`,
+                        animationDelay: `${i * 0.1}s`
+                      }}
+                    />
+                  );
+                })}
+              </g>
+            )}
+
+            {/* Central Stirrer Impeller Shaft */}
+            <line x1="150" y1="100" x2="150" y2="330" stroke="#1f2937" strokeWidth="6" strokeLinecap="round" />
+            <line x1="150" y1="100" x2="150" y2="330" stroke="#d1d5db" strokeWidth="2" />
+
+            {/* Agitator Blades (Impeller) at bottom */}
+            {agit_read > 0 ? (
+              <g style={agitSpinStyle}>
+                {/* Impeller Hub */}
+                <rect x="135" y="300" width="30" height="15" rx="3" fill="#111827" />
+                {/* Left/Right Turbine Blades */}
+                <path d="M 100 302 L 135 305 L 135 310 L 100 313 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
+                <path d="M 200 302 L 165 305 L 165 310 L 200 313 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
+                {/* Sparger Ring at bottom */}
+                <line x1="100" y1="340" x2="200" y2="340" stroke="#4b5563" strokeWidth="3" strokeDasharray="3,3" />
+              </g>
+            ) : (
+              <g>
+                <rect x="135" y="300" width="30" height="15" rx="3" fill="#374151" />
+                <path d="M 100 302 L 135 305 L 135 310 L 100 313 Z" fill="#4b5563" />
+                <path d="M 200 302 L 165 305 L 165 310 L 200 313 Z" fill="#4b5563" />
+                <line x1="100" y1="340" x2="200" y2="340" stroke="#4b5563" strokeWidth="3" strokeDasharray="3,3" />
+              </g>
+            )}
+
+            {/* Top Motor Drive Assembly */}
+            <rect x="135" y="45" width="30" height="45" fill="url(#metal-grad)" stroke="#1e293b" />
+            <rect x="130" y="35" width="40" height="10" fill="#1e293b" />
+            <circle cx="150" cy="35" r="4" fill="#ef4444" />
+
+            {/* Pipes and Valvings */}
+            {/* Gas Inlet pipe (Top-Right) */}
+            <path d="M 180 115 L 180 65 L 230 65" fill="none" stroke={air_read > 0 ? "#10b981" : "#9ca3af"} strokeWidth="6" strokeLinecap="round" />
+            {/* Gas Inlet Flow Arrow */}
+            {air_read > 0 && (
+              <path d="M 225 65 L 215 60 L 215 70 Z" fill="#ffffff" className="flow-arrow-animation-right" />
+            )}
+
+            {/* Air Outlet pipe (Top-Left) */}
+            <path d="M 120 115 L 120 80 L 60 80" fill="none" stroke={air_out_read > 0 ? "#3b82f6" : "#9ca3af"} strokeWidth="6" strokeLinecap="round" />
+            {/* Air Outlet Flow Arrow */}
+            {air_out_read > 0 && (
+              <path d="M 65 80 L 75 75 L 75 85 Z" fill="#ffffff" className="flow-arrow-animation-left" />
+            )}
+
+            {/* Bottom Product Harvest pipe */}
+            <path d="M 150 380 L 150 420 L 120 420" fill="none" stroke="#4b5563" strokeWidth="8" strokeLinecap="round" />
+            {/* Gas Control Valve at bottom right */}
+            <path d="M 200 370 L 200 420" fill="none" stroke="#4b5563" strokeWidth="4" />
+            <polygon points="190,385 210,385 190,405 210,405" fill="#374151" stroke="#1f2937" strokeWidth="1" />
+
+            {/* Sensor Probe Lines (Left Wall) */}
+            {/* pH probe */}
+            <path d="M 50 150 L 80 150" stroke="#3b82f6" strokeWidth="2" strokeDasharray="3 3" />
+            <rect x="74" y="146" width="10" height="8" fill="#3b82f6" />
+            {/* DO probe */}
+            <path d="M 50 210 L 80 210" stroke="#10b981" strokeWidth="2" strokeDasharray="3 3" />
+            <rect x="74" y="206" width="10" height="8" fill="#10b981" />
+            {/* Temp probe */}
+            <path d="M 50 270 L 80 270" stroke="#ef4444" strokeWidth="2" strokeDasharray="3 3" />
+            <rect x="74" y="266" width="10" height="8" fill="#ef4444" />
+            {/* Level probe */}
+            <path d="M 50 330 L 80 330" stroke="#f59e0b" strokeWidth="2" strokeDasharray="3 3" />
+            <rect x="74" y="326" width="10" height="8" fill="#f59e0b" />
+          </svg>
+
+          {/* Motor Drive RPM Display Box Overlaid on Vessel Head */}
+          <div className="motor-drive-display">
+            <span className="display-label">MOTOR RPM</span>
+            <div className="display-screen">
+              <span className="screen-val">{Math.round(agit_read)}</span>
+              <span className="screen-unit">RPM</span>
+            </div>
+            <span className="display-sv">SV: {Math.round(agit_set)}</span>
+          </div>
+
+          {/* Gas Inlet Flow slpm Box Overlaid on Inlet Pipe */}
+          <div className="gas-inlet-display">
+            <span className="display-label">AIR FLOW IN</span>
+            <div className="display-screen green-lcd">
+              <span className="screen-val">{air_read.toFixed(1)}</span>
+              <span className="screen-unit">slpm</span>
+            </div>
+          </div>
+
+          {/* Air Outlet Flow slpm Box Overlaid on Outlet Pipe */}
+          <div className="air-outlet-display">
+            <span className="display-label">AIR OUT (PMa)</span>
+            <div className="display-screen blue-lcd">
+              <span className="screen-val">{air_out_read.toFixed(1)}</span>
+              <span className="screen-unit">PMa</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Side: Detailed Progress Bar Gauges */}
+        <div className="diagram-gauges-col">
+          <div className="gauges-panel-card">
+            
+            {/* Volume Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">🎚️</span>
+                <span className="gauge-title">VOLUME (LEVEL)</span>
+                <span className="gauge-value">{level_read.toFixed(1)} %</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, level_read))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>50</span>
+                <span>100</span>
+              </div>
+            </div>
+
+            {/* Agitator RPM Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">⚙️</span>
+                <span className="gauge-title">AGITATOR SPEED (RPM)</span>
+                <span className="gauge-value">{agit_read.toFixed(1)} RPM</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar purple-bar" style={{ width: `${Math.min(100, Math.max(0, (agit_read / 500) * 100))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>250</span>
+                <span>500</span>
+              </div>
+            </div>
+
+            {/* Air Flow In Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">🟢</span>
+                <span className="gauge-title">AIR FLOW IN</span>
+                <span className="gauge-value">{air_read.toFixed(1)} slpm</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (air_read / 1000) * 100))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>500</span>
+                <span>1000</span>
+              </div>
+            </div>
+
+            {/* Air Flow Out Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">🔵</span>
+                <span className="gauge-title">AIR OUT (PMa)</span>
+                <span className="gauge-value">{air_out_read.toFixed(1)} PMa</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar blue-bar" style={{ width: `${Math.min(100, Math.max(0, (air_out_read / 1000) * 100))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>500</span>
+                <span>1000</span>
+              </div>
+            </div>
+
+            {/* pH Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">pH</span>
+                <span className="gauge-title">pH VALUE</span>
+                <span className="gauge-value">{ph_read.toFixed(2)}</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (ph_read / 14) * 100))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>7</span>
+                <span>14</span>
+              </div>
+            </div>
+
+            {/* DO Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">🫧</span>
+                <span className="gauge-title">DISSOLVED OXYGEN (DO)</span>
+                <span className="gauge-value">{do_read.toFixed(1)} %</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (do_read / 200) * 100))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>100</span>
+                <span>200</span>
+              </div>
+            </div>
+
+            {/* Temperature Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">🌡️</span>
+                <span className="gauge-title">TEMPERATURE</span>
+                <span className="gauge-value">{temp_read.toFixed(1)} °C</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar red-bar" style={{ width: `${Math.min(100, Math.max(0, (temp_read / 100) * 100))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>50</span>
+                <span>100</span>
+              </div>
+            </div>
+
+            {/* Heating Power Gauge */}
+            <div className="gauge-item">
+              <div className="gauge-label-row">
+                <span className="gauge-icon">🔥</span>
+                <span className="gauge-title">HEATING POWER</span>
+                <span className="gauge-value">{heat_read.toFixed(1)} %</span>
+              </div>
+              <div className="gauge-track-bar">
+                <div className="gauge-filled-bar orange-bar" style={{ width: `${Math.min(100, Math.max(0, heat_read))}%` }}></div>
+              </div>
+              <div className="gauge-limits">
+                <span>0</span>
+                <span>50</span>
+                <span>100</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. BOTTOM SPARKLINE TRENDS PANEL */}
+      <div className="diagram-sparklines-row">
+        
+        {/* Sparkline 1: Volume */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">VOLUME (%)</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'level_read', '#10b981', 0, 100)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 2: RPM */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">RPM</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'agit_read', '#8b5cf6', 0, 500)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 3: Air In */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">AIR IN (L/M)</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'air_read', '#10b981', 0, 1000)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 4: Air Out */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">AIR OUT (PMa)</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'air_out_read', '#3b82f6', 0, 1000)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 5: pH */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">pH</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'ph_read', '#10b981', 0, 14)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 6: DO */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">DO (%)</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'do_read', '#10b981', 0, 200)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 7: Temp */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">TEMP (°C)</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'temp_read', '#ef4444', 0, 100)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+        {/* Sparkline 8: Heat */}
+        <div className="sparkline-card">
+          <span className="sparkline-title">HEAT (%)</span>
+          <div className="sparkline-chart-area">
+            {renderSparkline(chartData, 'heat_read', '#f59e0b', 0, 100)}
+          </div>
+          <div className="sparkline-axis-labels">
+            <span>{startLabel}</span>
+            <span>{midLabel}</span>
+            <span>{endLabel}</span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 4. FOOTER STATUS BAR */}
+      <div className="diagram-status-footer-bar">
+        <div className="status-indicator-tag">
+          STATUS: <span className={`status-badge-val ${isReplayingPlaying ? 'replaying-badge' : 'running-badge'}`}>{isReplaying ? (isReplayingPlaying ? 'PLAYBACK' : 'PAUSED') : 'RUNNING'}</span>
+        </div>
+        <div className="action-buttons-indicator">
+          <span className="indicator-btn-mock active-btn-mock">TREND</span>
+          <span className="indicator-btn-mock">ALARM</span>
+          <span className="indicator-btn-mock">SETTINGS</span>
+        </div>
+        <div className="user-role-indicator">
+          USER: <strong>OPERATOR</strong>
+        </div>
+      </div>
+
+    </div>
+  );
+};
 const defaultMachine = { id: 'm1', name: 'Bioreactor 1' };
 const defaultJob = {
   id: 'job-' + Date.now(),
   machineId: 'm1',
   name: 'Default Session',
-  createdAt: new Date().toLocaleString(),
+  createdAt: new Date().toISOString(),
   data: []
 };
 
@@ -97,14 +733,30 @@ function App() {
     if (!v) return '';
     if (v instanceof Date) return `${pad2(v.getHours())}:${pad2(v.getMinutes())}`;
     if (typeof v === 'string') {
+      // If it looks like an ISO string or full date-time string, parse it as a Date first
+      if (v.includes('-') || v.includes('T')) {
+        const d = new Date(v);
+        if (!isNaN(d.getTime())) return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      }
       // try match HH:MM or HH:MM:SS
-      const m = v.match(/(\d{1,2}):(\d{2})/);
+      const m = v.match(/^(\d{1,2}):(\d{2})/);
       if (m) return `${pad2(parseInt(m[1], 10))}:${pad2(parseInt(m[2], 10))}`;
-      // try Date.parse fallback
-      const d = new Date(v);
-      if (!isNaN(d.getTime())) return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     }
     return '';
+  };
+
+  const toYYYYMMDD = (v) => {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  };
+  const formatCreatedAt = (v) => {
+    if (!v) return '';
+    if (v.includes(',') || !v.includes('T')) return v;
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return v;
+    return d.toLocaleString('th-TH');
   };
   // Authentication State
   const [userRole, setUserRole] = useState(() => {
@@ -186,8 +838,15 @@ function App() {
   const [jobs, setJobs] = useState([]);
   const [currentJobId, setCurrentJobId] = useState(null);
   const [customers, setCustomers] = useState([]);
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackJobId, setFeedbackJobId] = useState('');
+  const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+  const [hoverRating, setHoverRating] = useState(0);
 
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'combined' | 'table'
+  const [activeTab, setActiveTab] = useState('diagram'); // 'diagram' | 'dashboard' | 'combined' | 'table'
   // Theme: 'dark' | 'light'
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('bioprocess-theme') || 'dark';
@@ -220,6 +879,9 @@ function App() {
     do_set: 50, do_read: 50,
     agit_set: 200, agit_read: 200,
     air_set: 2.0, air_read: 2.0,
+    level_set: 65.0, level_read: 65.0,
+    air_out_set: 1.9, air_out_read: 1.9,
+    heat_set: 50, heat_read: 50,
     remark: '',
     date: new Date().toLocaleDateString('en-CA'),
     time: toHHMM(new Date())
@@ -449,6 +1111,12 @@ function App() {
     agit_set: row.agit_set !== undefined ? row.agit_set : row.agit,
     air_read: row.air_read !== undefined ? row.air_read : row.air,
     air_set: row.air_set !== undefined ? row.air_set : row.air,
+    level_set: row.level_set !== undefined && row.level_set !== null ? row.level_set : 65.0,
+    level_read: row.level_read !== undefined && row.level_read !== null ? row.level_read : 65.0,
+    air_out_set: row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(( (row.air_set !== undefined ? row.air_set : row.air || 0) * 0.96 ).toFixed(2)),
+    air_out_read: row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(( (row.air_read !== undefined ? row.air_read : row.air || 0) * 0.96 ).toFixed(2)),
+    heat_set: row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
+    heat_read: row.heat_read !== undefined && row.heat_read !== null ? row.heat_read : 0.0,
     remark: row.remark !== undefined ? row.remark : ''
   })).sort((a, b) => {
     const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
@@ -601,6 +1269,12 @@ function App() {
         agit_read: lastDataPoint.agit_read,
         air_set: lastDataPoint.air_set,
         air_read: lastDataPoint.air_read,
+        level_set: lastDataPoint.level_set !== undefined && lastDataPoint.level_set !== null ? lastDataPoint.level_set : 65.0,
+        level_read: lastDataPoint.level_read !== undefined && lastDataPoint.level_read !== null ? lastDataPoint.level_read : 65.0,
+        air_out_set: lastDataPoint.air_out_set !== undefined && lastDataPoint.air_out_set !== null ? lastDataPoint.air_out_set : parseFloat(((lastDataPoint.air_set || 0) * 0.96).toFixed(2)),
+        air_out_read: lastDataPoint.air_out_read !== undefined && lastDataPoint.air_out_read !== null ? lastDataPoint.air_out_read : parseFloat(((lastDataPoint.air_read || 0) * 0.96).toFixed(2)),
+        heat_set: lastDataPoint.heat_set !== undefined && lastDataPoint.heat_set !== null ? lastDataPoint.heat_set : 0,
+        heat_read: lastDataPoint.heat_read !== undefined && lastDataPoint.heat_read !== null ? lastDataPoint.heat_read : 0,
         remark: '',
         date: new Date().toLocaleDateString('en-CA'),
         time: toHHMM(new Date())
@@ -617,8 +1291,14 @@ function App() {
         agit_read: 200,
         air_set: 2.0,
         air_read: 2.0,
+        level_set: 65.0,
+        level_read: 65.0,
+        air_out_set: 1.9,
+        air_out_read: 1.9,
+        heat_set: 0,
+        heat_read: 0,
         remark: '',
-        date: new Date().toISOString().slice(0,10),
+        date: toYYYYMMDD(new Date()),
         time: toHHMM(new Date())
       });
     }
@@ -629,6 +1309,9 @@ function App() {
     setMachines(data.machines);
     setJobs(data.jobs);
     setCustomers(data.customers);
+    if (data.feedbacks) {
+      setFeedbacks(data.feedbacks);
+    }
   };
 
   const handleMachineChange = (e) => {
@@ -901,8 +1584,8 @@ function App() {
     setEditingRowIndex(index);
     setEditingRowData({
       timestamp: row.timestamp || new Date().toISOString(),
-      date: row.date || (row.timestamp ? new Date(row.timestamp).toISOString().slice(0, 10) : ''),
-      time: row.time || (row.timestamp ? new Date(row.timestamp).toTimeString().slice(0, 5) : ''),
+      date: row.timestamp ? toYYYYMMDD(row.timestamp) : (row.date || ''),
+      time: row.timestamp ? toHHMM(row.timestamp) : (row.time || ''),
       temp_set: row.temp_set !== undefined ? row.temp_set : 0,
       temp_read: row.temp_read !== undefined ? row.temp_read : 0,
       ph_set: row.ph_set !== undefined ? row.ph_set : 0,
@@ -913,6 +1596,12 @@ function App() {
       agit_read: row.agit_read !== undefined ? row.agit_read : 0,
       air_set: row.air_set !== undefined ? row.air_set : 0,
       air_read: row.air_read !== undefined ? row.air_read : 0,
+      level_set: row.level_set !== undefined ? row.level_set : 65.0,
+      level_read: row.level_read !== undefined ? row.level_read : 65.0,
+      air_out_set: row.air_out_set !== undefined ? row.air_out_set : parseFloat(((row.air_set || 0) * 0.96).toFixed(2)),
+      air_out_read: row.air_out_read !== undefined ? row.air_out_read : parseFloat(((row.air_read || 0) * 0.96).toFixed(2)),
+      heat_set: row.heat_set !== undefined ? row.heat_set : 0,
+      heat_read: row.heat_read !== undefined ? row.heat_read : 0,
       remark: row.remark !== undefined ? row.remark : ''
     });
   };
@@ -1008,6 +1697,9 @@ function App() {
       formData.do_set, formData.do_read,
       formData.agit_set, formData.agit_read,
       formData.air_set, formData.air_read,
+      formData.level_set, formData.level_read,
+      formData.air_out_set, formData.air_out_read,
+      formData.heat_set, formData.heat_read,
       formData.remark,
       inputTime,
       inputDate
@@ -1028,6 +1720,9 @@ function App() {
     do_set, do_read,
     agit_set, agit_read,
     air_set, air_read,
+    level_set, level_read,
+    air_out_set, air_out_read,
+    heat_set, heat_read,
     remark = '',
     time = '',
     date = ''
@@ -1062,6 +1757,9 @@ function App() {
           do_set, do_read,
           agit_set, agit_read,
           air_set, air_read,
+          level_set, level_read,
+          air_out_set, air_out_read,
+          heat_set, heat_read,
           remark,
           time,
           date,
@@ -1123,6 +1821,52 @@ function App() {
     }
   };
 
+  const submitFeedback = async (e) => {
+    if (e) e.preventDefault();
+    if (!feedbackJobId) return;
+
+    try {
+      const res = await fetch('/api/feedbacks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: feedbackJobId,
+          rating: feedbackRating,
+          comment: feedbackComment.trim()
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        applyDBUpdate(data);
+        setFeedbackSuccess(true);
+        setTimeout(() => {
+          setShowFeedbackModal(false);
+          setFeedbackComment('');
+          setFeedbackRating(5);
+          setFeedbackSuccess(false);
+        }, 1800);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deleteFeedback = async (id) => {
+    if (window.confirm("ยืนยันการลบความคิดเห็นประเมินผลนี้?")) {
+      try {
+        const res = await fetch(`/api/feedbacks/${id}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          applyDBUpdate(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
   const getMachineName = (id) => {
     const m = machines.find(m => m.id === id);
     return m ? m.name : 'Unknown Machine';
@@ -1143,14 +1887,17 @@ function App() {
       'DO SV (%)', 'DO PV (%)', 
       'Agit SV (RPM)', 'Agit PV (RPM)', 
       'Air Flow SV (L/M)', 'Air Flow PV (L/M)',
+      'Volume SV (%)', 'Volume PV (%)',
+      'Air Out SV (L/M)', 'Air Out PV (L/M)',
+      'Heat SV (%)', 'Heat PV (%)',
       'Remarks'
     ];
     const csvRows = [headers.join(',')];
     const isCurrent = job.id === currentJob?.id;
     const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
     rowsToExport.forEach(row => {
-      const dateVal = row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0, 10)) : '');
-      const timeVal = row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0, 5)) : '');
+      const dateVal = row.timestamp ? toYYYYMMDD(row.timestamp) : (row.date || '');
+      const timeVal = row.timestamp ? toHHMM(row.timestamp) : (row.time || '');
       const hrVal = row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(job, row.timestamp);
       const t_s = row.temp_set !== undefined ? row.temp_set : row.temp;
       const t_r = row.temp_read !== undefined ? row.temp_read : row.temp;
@@ -1162,6 +1909,12 @@ function App() {
       const ag_r = row.agit_read !== undefined ? row.agit_read : row.agit;
       const ai_s = row.air_set !== undefined ? row.air_set : row.air;
       const ai_r = row.air_read !== undefined ? row.air_read : row.air;
+      const lv_s = row.level_set !== undefined && row.level_set !== null ? row.level_set : 65.0;
+      const lv_r = row.level_read !== undefined && row.level_read !== null ? row.level_read : 65.0;
+      const ao_s = row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((ai_s || 0) * 0.96).toFixed(2));
+      const ao_r = row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((ai_r || 0) * 0.96).toFixed(2));
+      const ht_s = row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0;
+      const ht_r = row.heat_read !== undefined && row.heat_read !== null ? row.heat_read : 0.0;
       const rem = row.remark !== undefined ? row.remark : '';
 
       const values = [
@@ -1173,6 +1926,9 @@ function App() {
         d_s, d_r, 
         ag_s, ag_r, 
         ai_s, ai_r,
+        lv_s, lv_r,
+        ao_s, ao_r,
+        ht_s, ht_r,
         `"${rem.replace(/"/g, '""')}"`
       ];
       csvRows.push(values.join(','));
@@ -1188,6 +1944,15 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    if (userRole === 'customer') {
+      setTimeout(() => {
+        setFeedbackJobId(job.id);
+        setFeedbackRating(5);
+        setFeedbackComment('');
+        setFeedbackSuccess(false);
+        setShowFeedbackModal(true);
+      }, 800);
+    }
   };
 
   const exportToExcel = (job = currentJob) => {
@@ -1200,9 +1965,11 @@ function App() {
     const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
     
     const sheetData = rowsToExport.map(row => {
+      const ai_s = row.air_set !== undefined ? row.air_set : row.air;
+      const ai_r = row.air_read !== undefined ? row.air_read : row.air;
       return {
-        'Date': row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0, 10)) : ''),
-        'Time': row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0, 5)) : ''),
+        'Date': row.timestamp ? toYYYYMMDD(row.timestamp) : (row.date || ''),
+        'Time': row.timestamp ? toHHMM(row.timestamp) : (row.time || ''),
         'Culture Hour (Hr)': row.cultureHour !== undefined ? row.cultureHour : getElapsedHours(job, row.timestamp),
         'Temp SV (°C)': row.temp_set !== undefined ? row.temp_set : row.temp,
         'Temp PV (°C)': row.temp_read !== undefined ? row.temp_read : row.temp,
@@ -1212,8 +1979,14 @@ function App() {
         'DO PV (%)': row.do_read !== undefined ? row.do_read : row.do,
         'Agit SV (RPM)': row.agit_set !== undefined ? row.agit_set : row.agit,
         'Agit PV (RPM)': row.agit_read !== undefined ? row.agit_read : row.agit,
-        'Air Flow SV (L/M)': row.air_set !== undefined ? row.air_set : row.air,
-        'Air Flow PV (L/M)': row.air_read !== undefined ? row.air_read : row.air,
+        'Air Flow SV (L/M)': ai_s,
+        'Air Flow PV (L/M)': ai_r,
+        'Volume SV (%)': row.level_set !== undefined && row.level_set !== null ? row.level_set : 65.0,
+        'Volume PV (%)': row.level_read !== undefined && row.level_read !== null ? row.level_read : 65.0,
+        'Air Out SV (L/M)': row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((ai_s || 0) * 0.96).toFixed(2)),
+        'Air Out PV (L/M)': row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((ai_r || 0) * 0.96).toFixed(2)),
+        'Heat SV (%)': row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
+        'Heat PV (%)': row.heat_read !== undefined && row.heat_read !== null ? row.heat_read : 0.0,
         'Remarks': row.remark !== undefined ? row.remark : ''
       };
     });
@@ -1235,6 +2008,15 @@ function App() {
 
     const safeName = job.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     XLSX.writeFile(workbook, `${safeName}_data.xlsx`);
+    if (userRole === 'customer') {
+      setTimeout(() => {
+        setFeedbackJobId(job.id);
+        setFeedbackRating(5);
+        setFeedbackComment('');
+        setFeedbackSuccess(false);
+        setShowFeedbackModal(true);
+      }, 800);
+    }
   };
 
   const exportToPDF = () => {
@@ -1615,6 +2397,21 @@ function App() {
                 <span className="sidebar-badge">{customers.length}</span>
               </div>
 
+              {/* Menu Customer Feedbacks */}
+              <div 
+                className={`sidebar-menu-item ${currentAppView === 'feedbacks' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('feedbacks');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <span className="sidebar-menu-link">
+                  <Star size={18} />
+                  Customer Feedbacks
+                </span>
+                <span className="sidebar-badge">{feedbacks.length}</span>
+              </div>
+
               {/* Menu System Settings */}
               <div 
                 className={`sidebar-menu-item ${currentAppView === 'settings' ? 'active' : ''}`}
@@ -1826,7 +2623,7 @@ function App() {
                               );
                             })()}
                           </td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{c.createdAt}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{formatCreatedAt(c.createdAt)}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               className="delete-row-btn"
@@ -2088,7 +2885,7 @@ function App() {
                                 </span>
                               </td>
                               <td style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{job.name}</td>
-                              <td>{job.createdAt}</td>
+                              <td>{formatCreatedAt(job.createdAt)}</td>
                               <td>{job.data?.length || 0} จุด</td>
                               <td><code>{job.id}</code></td>
                               <td>
@@ -2398,6 +3195,113 @@ function App() {
               </form>
             </div>
           </div>
+        ) : currentAppView === 'feedbacks' ? (
+          /* CUSTOMER FEEDBACKS VIEW FOR ADMIN */
+          <div className="feedbacks-view">
+            <header className="dashboard-header">
+              <h2>Customer Feedbacks (ความพึงพอใจลูกค้า)</h2>
+            </header>
+
+            {/* Statistics Cards */}
+            {(() => {
+              const total = feedbacks.length;
+              const avg = total > 0 ? (feedbacks.reduce((sum, f) => sum + f.rating, 0) / total).toFixed(1) : '0.0';
+              const starCounts = [0, 0, 0, 0, 0, 0];
+              feedbacks.forEach(f => {
+                if (f.rating >= 1 && f.rating <= 5) starCounts[f.rating]++;
+              });
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+                  <div className="stat-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>คะแนนเฉลี่ย CSAT</span>
+                    <span style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent-yellow)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {avg} <span style={{ fontSize: '1.5rem', color: 'var(--text-secondary)' }}>/ 5.0</span>
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {"★".repeat(Math.round(avg)) + "☆".repeat(5 - Math.round(avg))}
+                    </span>
+                  </div>
+
+                  <div className="stat-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>จำนวนผู้ประเมิน</span>
+                    <span style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent-blue)' }}>
+                      {total} <span style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--text-secondary)' }}>ครั้ง</span>
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>เก็บข้อมูลแบบ Real-time บนระบบ</span>
+                  </div>
+
+                  <div className="stat-card" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>สัดส่วนการให้คะแนน</span>
+                    {[5, 4, 3, 2, 1].map(star => {
+                      const count = starCounts[star];
+                      const pct = total > 0 ? (count / total) * 100 : 0;
+                      return (
+                        <div key={star} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
+                          <span style={{ width: '12px', color: 'var(--accent-yellow)' }}>★</span>
+                          <span style={{ width: '8px', color: 'var(--text-secondary)' }}>{star}</span>
+                          <div style={{ flex: 1, height: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent-yellow)', borderRadius: '3px' }} />
+                          </div>
+                          <span style={{ width: '24px', textAlign: 'right', color: 'var(--text-secondary)' }}>{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {feedbacks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+                ยังไม่มีลูกค้าประเมินความพึงพอใจเข้ามาในระบบ
+              </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {feedbacks.map((fb) => (
+                    <div key={fb.id} style={{ 
+                      background: 'rgba(255, 255, 255, 0.02)', 
+                      border: '1px solid rgba(255, 255, 255, 0.05)', 
+                      borderRadius: '12px', 
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      position: 'relative'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <span style={{ fontWeight: 600, color: 'var(--accent-blue)', marginRight: '10px' }}>
+                            📁 รอบรัน: {fb.jobName || 'Unknown'}
+                          </span>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {formatCreatedAt(fb.createdAt)}
+                          </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ color: 'var(--accent-yellow)', fontWeight: 600 }}>
+                            {"★".repeat(fb.rating) + "☆".repeat(5 - fb.rating)} ({fb.rating} / 5)
+                          </span>
+                          <button 
+                            className="delete-row-btn" 
+                            style={{ margin: 0, padding: '4px' }}
+                            onClick={() => deleteFeedback(fb.id)}
+                            title="Delete feedback"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div style={{ fontSize: '0.9rem', color: '#cbdce0', fontStyle: fb.comment ? 'normal' : 'italic', marginTop: '4px' }}>
+                        {fb.comment ? `"${fb.comment}"` : "— ไม่มีความเห็นเพิ่มเติม —"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
         ) : (
           /* MONITORING VIEW */
           <>
@@ -2453,6 +3357,12 @@ function App() {
                 
                 {currentJob && (
                   <div className="nav-tabs" style={{ margin: 0 }}>
+                    <button 
+                      className={`nav-tab ${activeTab === 'diagram' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('diagram')}
+                    >
+                      <Cpu size={16} /> Diagram
+                    </button>
                     <button 
                       className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
                       onClick={() => setActiveTab('dashboard')}
@@ -2600,6 +3510,45 @@ function App() {
                         </div>
                       </div>
                     </div>
+                    <div className="form-group">
+                      <label>VOLUME (%)</label>
+                      <div className="form-inputs-row">
+                        <div className="form-input-subgroup">
+                          <span className="input-sublabel">ตั้งค่า (SV)</span>
+                          <input type="number" step="0.1" name="level_set" value={formData.level_set} onChange={handleInputChange} />
+                        </div>
+                        <div className="form-input-subgroup">
+                          <span className="input-sublabel">อ่านค่า (PV)</span>
+                          <input type="number" step="0.1" name="level_read" value={formData.level_read} onChange={handleInputChange} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>AIR OUT (PMa)</label>
+                      <div className="form-inputs-row">
+                        <div className="form-input-subgroup">
+                          <span className="input-sublabel">ตั้งค่า (SV)</span>
+                          <input type="number" step="0.1" name="air_out_set" value={formData.air_out_set} onChange={handleInputChange} />
+                        </div>
+                        <div className="form-input-subgroup">
+                          <span className="input-sublabel">อ่านค่า (PV)</span>
+                          <input type="number" step="0.1" name="air_out_read" value={formData.air_out_read} onChange={handleInputChange} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>HEAT (%)</label>
+                      <div className="form-inputs-row">
+                        <div className="form-input-subgroup">
+                          <span className="input-sublabel">ตั้งค่า (SV)</span>
+                          <input type="number" step="1" name="heat_set" value={formData.heat_set} onChange={handleInputChange} />
+                        </div>
+                        <div className="form-input-subgroup">
+                          <span className="input-sublabel">อ่านค่า (PV)</span>
+                          <input type="number" step="1" name="heat_read" value={formData.heat_read} onChange={handleInputChange} />
+                        </div>
+                      </div>
+                    </div>
                     {/* Date and Time manual inputs */}
                     <div className="form-group" style={{ minWidth: '180px' }}>
                       <label>📅 DATE (วันที่บันทึก)</label>
@@ -2683,7 +3632,14 @@ function App() {
                 <p>Use the manual entry form above to add your first record.</p>
               </div>
             ) : (
-              activeTab === 'dashboard' ? (
+              activeTab === 'diagram' ? (
+                <BSTRDiagram 
+                  dataPoint={lastDataPoint} 
+                  chartData={chartData} 
+                  isReplaying={isReplay} 
+                  isReplayingPlaying={isReplayPlaying} 
+                />
+              ) : activeTab === 'dashboard' ? (
                 <>
                   {/* Real-time Metrics Grid */}
                   <div className="metrics-grid">
@@ -2758,7 +3714,7 @@ function App() {
                       <ResponsiveContainer width="100%" height="85%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="time" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                           <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(2) : val} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
@@ -2775,7 +3731,7 @@ function App() {
                       <ResponsiveContainer width="100%" height="85%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="time" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                           <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
@@ -2792,7 +3748,7 @@ function App() {
                       <ResponsiveContainer width="100%" height="85%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="time" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                           <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                           <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                           <Tooltip content={<CustomTooltip />} />
@@ -2888,7 +3844,7 @@ function App() {
                   <ResponsiveContainer width="100%" height="80%">
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="time" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                      <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
                       <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{fontSize: 12}} label={{ value: 'TEMP / pH / DO / AIR', angle: -90, position: 'insideLeft', fill: 'var(--text-secondary)' }} />
                       <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} label={{ value: 'AGIT (RPM)', angle: 90, position: 'insideRight', fill: 'var(--text-secondary)' }} />
                       <Tooltip content={<CustomTooltip />} />
@@ -2938,10 +3894,19 @@ function App() {
                           <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-green)' }}>DO (%)</th>
                           <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-yellow)' }}>AGIT (RPM)</th>
                           <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-purple)' }}>AIR (L/M)</th>
+                          <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-green)' }}>VOLUME (%)</th>
+                          <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-purple)' }}>AIR OUT (PMa)</th>
+                          <th colSpan="2" style={{ textAlign: 'center', color: 'var(--accent-yellow)' }}>HEAT (%)</th>
                           <th rowSpan="2" style={{ verticalAlign: 'middle', textAlign: 'left', padding: '12px', minWidth: '150px' }}>Remarks / บันทึก</th>
                           {userRole === 'admin' && <th rowSpan="2" style={{ width: '80px', textAlign: 'center', verticalAlign: 'middle' }}>Action</th>}
                         </tr>
                         <tr>
+                          <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>SV</th>
+                          <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>PV</th>
+                          <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>SV</th>
+                          <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>PV</th>
+                          <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>SV</th>
+                          <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>PV</th>
                           <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>SV</th>
                           <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>PV</th>
                           <th style={{ textAlign: 'center', fontSize: '0.75rem', padding: '6px' }}>SV</th>
@@ -3067,6 +4032,60 @@ function App() {
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-purple)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={editingRowData.level_set} 
+                                  onChange={(e) => handleEditChange('level_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={editingRowData.level_read} 
+                                  onChange={(e) => handleEditChange('level_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={editingRowData.air_out_set} 
+                                  onChange={(e) => handleEditChange('air_out_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={editingRowData.air_out_read} 
+                                  onChange={(e) => handleEditChange('air_out_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-purple)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="1" 
+                                  value={editingRowData.heat_set} 
+                                  onChange={(e) => handleEditChange('heat_set', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '6px' }}>
+                                <input 
+                                  type="number" 
+                                  step="1" 
+                                  value={editingRowData.heat_read} 
+                                  onChange={(e) => handleEditChange('heat_read', parseFloat(e.target.value) || 0)} 
+                                  style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-yellow)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
+                                />
+                              </td>
                               <td style={{ textAlign: 'left', padding: '6px' }}>
                                 <input 
                                   type="text" 
@@ -3100,8 +4119,8 @@ function App() {
                             </tr>
                           ) : (
                             <tr key={index}>
-                              <td style={{ textAlign: 'center' }}>{row.date || (row.timestamp ? (new Date(row.timestamp).toISOString().slice(0,10)) : '')}</td>
-                              <td style={{ textAlign: 'center' }}>{row.time || (row.timestamp ? (new Date(row.timestamp).toTimeString().slice(0,5)) : '')}</td>
+                              <td style={{ textAlign: 'center' }}>{row.timestamp ? toYYYYMMDD(row.timestamp) : (row.date || '')}</td>
+                              <td style={{ textAlign: 'center' }}>{row.timestamp ? toHHMM(row.timestamp) : (row.time || '')}</td>
                               <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{row.cultureHour !== undefined ? `${row.cultureHour} ชม.` : '-'}</td>
                               <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.temp_set === 'number' ? row.temp_set.toFixed(1) : '-'}</td>
                               <td style={{ textAlign: 'center', color: 'var(--accent-red)', fontWeight: 600 }}>{typeof row.temp_read === 'number' ? row.temp_read.toFixed(1) : '-'}</td>
@@ -3113,6 +4132,12 @@ function App() {
                               <td style={{ textAlign: 'center', color: 'var(--accent-yellow)', fontWeight: 600 }}>{row.agit_read || '-'}</td>
                               <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.air_set === 'number' ? row.air_set.toFixed(1) : '-'}</td>
                               <td style={{ textAlign: 'center', color: 'var(--accent-purple)', fontWeight: 600 }}>{typeof row.air_read === 'number' ? row.air_read.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.level_set === 'number' ? row.level_set.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-green)', fontWeight: 600 }}>{typeof row.level_read === 'number' ? row.level_read.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.air_out_set === 'number' ? row.air_out_set.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-purple)', fontWeight: 600 }}>{typeof row.air_out_read === 'number' ? row.air_out_read.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.heat_set === 'number' ? row.heat_set.toFixed(1) : '-'}</td>
+                              <td style={{ textAlign: 'center', color: 'var(--accent-yellow)', fontWeight: 600 }}>{typeof row.heat_read === 'number' ? row.heat_read.toFixed(1) : '-'}</td>
                               <td style={{ textAlign: 'left', padding: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{row.remark || '-'}</td>
                               {userRole === 'admin' && (
                                 <td style={{ textAlign: 'center' }}>
@@ -3475,6 +4500,84 @@ function App() {
               );
             })()}
 
+          </div>
+        </div>
+      )}
+
+      {/* Glassmorphic Feedback Modal */}
+      {showFeedbackModal && (
+        <div className="modal-backdrop" onClick={() => setShowFeedbackModal(false)}>
+          <div className="modal-container" style={{ maxWidth: '420px', padding: '1.5rem 2rem' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Star size={22} color="var(--accent-yellow)" />
+                ประเมินความพึงพอใจ
+              </h3>
+              <button className="modal-close-btn" onClick={() => setShowFeedbackModal(false)}>✕</button>
+            </div>
+            
+            <div className="modal-body" style={{ marginTop: '1rem' }}>
+              {feedbackSuccess ? (
+                <div style={{ textAlign: 'center', padding: '1.5rem 0', color: 'var(--accent-green)' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '10px' }}>✓</div>
+                  <h4 style={{ fontWeight: 600 }}>ขอบคุณสำหรับความคิดเห็นของคุณ!</h4>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '6px' }}>ระบบบันทึกคะแนนเรียบร้อยแล้ว</p>
+                </div>
+              ) : (
+                <form onSubmit={submitFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <p style={{ fontSize: '0.85rem', color: '#cbdce0', textAlign: 'center', lineHeight: 1.4 }}>
+                    คะแนนความพึงพอใจการดูบอร์ดข้อมูลรอบการรันนี้
+                  </p>
+                  
+                  {/* Star Selection */}
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', margin: '8px 0' }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        style={{
+                          cursor: 'pointer',
+                          fontSize: '2.5rem',
+                          color: star <= (hoverRating || feedbackRating) ? 'var(--accent-yellow)' : 'rgba(255, 255, 255, 0.15)',
+                          transition: 'color 0.2s',
+                          userSelect: 'none'
+                        }}
+                        onClick={() => setFeedbackRating(star)}
+                        onMouseEnter={() => setHoverRating(star)}
+                        onMouseLeave={() => setHoverRating(0)}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  
+                  {/* Comment */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>ข้อเสนอแนะเพิ่มเติม (ถ้ามี)</label>
+                    <textarea
+                      value={feedbackComment}
+                      onChange={(e) => setFeedbackComment(e.target.value)}
+                      placeholder="พิมพ์ความคิดเห็นหรือคำแนะนำของคุณที่นี่..."
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        color: 'white',
+                        fontSize: '0.85rem',
+                        height: '80px',
+                        resize: 'none',
+                        outline: 'none',
+                        fontFamily: 'inherit'
+                      }}
+                    />
+                  </div>
+                  
+                  <button type="submit" className="submit-btn" style={{ width: '100%', height: '42px', marginTop: '4px' }}>
+                    ส่งแบบประเมิน (Submit Rating)
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
