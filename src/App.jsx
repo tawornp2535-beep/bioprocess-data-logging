@@ -182,7 +182,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
     endLabel = `ชั่วโมงที่ ${chartData[chartData.length - 1].cultureHour !== undefined ? chartData[chartData.length - 1].cultureHour : 0}`;
   }
 
-  const isMachineStopped = jobStatus === 'stopped';
+  const isMachineStopped = jobStatus === 'stopped' || jobStatus === 'finished';
 
   // Impeller spinner speed calculation (CSS custom property)
   const agitSpeedSec = !isMachineStopped && agit_read > 0 ? Math.max(0.1, 60 / agit_read) : 0;
@@ -207,12 +207,13 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
           <p className="diagram-subtitle">PROCESS MONITORING DIAGRAM</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {userRole === 'admin' && !isReplaying && (
+          {userRole === 'admin' && !isReplaying && jobStatus !== 'finished' && (
             <button
               onClick={onToggleStatus}
-              className={`status-control-btn ${isMachineStopped ? 'btn-start-machine' : 'btn-stop-machine'}`}
+              className="status-control-btn btn-stop-machine"
+              style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)', borderColor: '#dc2626' }}
             >
-              {isMachineStopped ? '▶️ กดเริ่มเครื่อง' : '🛑 กดหยุดเครื่อง'}
+              ✅ เสร็จสิ้นงาน
             </button>
           )}
           <div className="diagram-datetime-box">
@@ -717,10 +718,10 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
       {/* 4. FOOTER STATUS BAR */}
       <div className="diagram-status-footer-bar">
         <div className="status-indicator-tag">
-          STATUS: <span className={`status-badge-val ${isReplaying ? (isReplayingPlaying ? 'replaying-badge' : 'paused-badge') : (isMachineStopped ? 'stopped-badge' : 'running-badge')}`}>
+          STATUS: <span className={`status-badge-val ${isReplaying ? (isReplayingPlaying ? 'replaying-badge' : 'paused-badge') : (jobStatus === 'finished' ? 'stopped-badge' : isMachineStopped ? 'stopped-badge' : 'running-badge')}`}>
             {isReplaying 
               ? (isReplayingPlaying ? 'PLAYBACK' : 'PAUSED') 
-              : (isMachineStopped ? 'STOPPED' : 'RUNNING')}
+              : (jobStatus === 'finished' ? 'FINISHED' : isMachineStopped ? 'STOPPED' : 'RUNNING')}
           </span>
         </div>
         <div className="action-buttons-indicator">
@@ -1668,26 +1669,24 @@ function App() {
   };
 
   const handleToggleJobStatus = async (jobId, currentStatus) => {
-    const nextStatus = currentStatus === 'stopped' ? 'running' : 'stopped';
-    const confirmMessage = nextStatus === 'stopped'
-      ? 'คุณต้องการหยุดการทำงานของเครื่องมือใช่หรือไม่?'
-      : 'คุณต้องการเริ่มการทำงานของเครื่องมือใช่หรือไม่?';
-
+    // ปุ่มนี้คือ "เสร็จสิ้นงาน" — Finish job permanently (cannot restart)
+    if (currentStatus === 'finished') return; // already finished
+    const confirmMessage = 'ยืนยันการเสร็จสิ้นงานนี้?\n\nเมื่อยืนยันแล้ว งานจะสิ้นสุดถาวรและไม่สามารถเริ่มใหม่ได้';
     if (window.confirm(confirmMessage)) {
       try {
-        const res = await fetch(`/api/jobs/${jobId}/status`, {
+        const res = await fetch(`/api/jobs/${jobId}/finish`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: nextStatus })
+          headers: { 'Content-Type': 'application/json' }
         });
         if (res.ok) {
           const data = await res.json();
           applyDBUpdate(data);
         } else {
-          alert('ไม่สามารถเปลี่ยนสถานะเครื่องมือได้ กรุณาลองใหม่อีกครั้ง');
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.error || 'ไม่สามารถเสร็จสิ้นงานได้ กรุณาลองใหม่อีกครั้ง');
         }
       } catch (err) {
-        console.error('Error toggling job status:', err);
+        console.error('Error finishing job:', err);
         alert('เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
       }
     }
@@ -3781,14 +3780,23 @@ function App() {
                 >
                   {theme === 'dark' ? '🌙' : '☀️'}
                 </button>
-                {currentJob && userRole === 'admin' && (
+                {currentJob && userRole === 'admin' && currentJob.status !== 'finished' && (
                   <button
-                    className={`status-control-btn ${currentJob.status === 'stopped' ? 'btn-start-machine' : 'btn-stop-machine'}`}
+                    className="status-control-btn btn-stop-machine"
                     onClick={() => handleToggleJobStatus(currentJob.id, currentJob.status || 'running')}
-                    style={{ margin: 0, height: '38px', padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+                    style={{ margin: 0, height: '38px', padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, background: 'linear-gradient(135deg, #dc2626, #b91c1c)', borderColor: '#dc2626' }}
                   >
-                    {currentJob.status === 'stopped' ? '▶️ เริ่มเครื่อง' : '🛑 หยุดเครื่อง'}
+                    ✅ เสร็จสิ้นงาน
                   </button>
+                )}
+                {currentJob && currentJob.status === 'finished' && (
+                  <span style={{
+                    height: '38px', padding: '0 14px', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    fontSize: '0.82rem', fontWeight: 700, color: '#86efac',
+                    background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: '8px'
+                  }}>
+                    🏁 งานเสร็จสิ้นแล้ว
+                  </span>
                 )}
                 <button
                   className={`toggle-btn ${isReplay ? 'active' : ''}`}
