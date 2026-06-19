@@ -897,6 +897,60 @@ function App() {
   ];
   const [combinedSearchQuery, setCombinedSearchQuery] = useState('');
 
+  // Download compare chart data as CSV
+  const downloadCompareCSV = () => {
+    if (selectedCompareJobIds.length === 0) return;
+    const roundedPoints = {};
+    const columnKeys = [];
+    selectedCompareJobIds.forEach(jobId => {
+      const job = jobs.find(j => j.id === jobId);
+      if (!job) return;
+      const machine = machines.find(m => m.id === job.machineId);
+      const mPrefix = machine ? machine.name + ' - ' : '';
+      const jobLabel = mPrefix + job.name;
+      let minTimeMs = Infinity;
+      if (job.data && job.data.length > 0) {
+        job.data.forEach(row => {
+          if (row.timestamp) {
+            const t = new Date(row.timestamp).getTime();
+            if (!isNaN(t) && t < minTimeMs) minTimeMs = t;
+          }
+        });
+      }
+      compareParams.forEach(param => {
+        const paramLabel = COMPARE_PARAM_OPTIONS.find(o => o.value === param)?.label || param;
+        const lineKey = compareParams.length > 1 ? jobLabel + ' [' + paramLabel + ']' : jobLabel;
+        if (!columnKeys.includes(lineKey)) columnKeys.push(lineKey);
+        if (job.data) {
+          job.data.forEach(row => {
+            const val = row[param];
+            if (val === undefined || isNaN(parseFloat(val))) return;
+            const t = row.timestamp ? new Date(row.timestamp).getTime() : NaN;
+            const elapsed = isNaN(t) || minTimeMs === Infinity ? 0 : (t - minTimeMs) / 3600000;
+            const rounded = Math.round(elapsed * 10) / 10;
+            if (!roundedPoints[rounded]) roundedPoints[rounded] = { cultureHour: rounded };
+            roundedPoints[rounded][lineKey] = parseFloat(val);
+          });
+        }
+      });
+    });
+    const rows = Object.values(roundedPoints).sort((a, b) => a.cultureHour - b.cultureHour);
+    const header = ['Culture Hour (ชม.)', ...columnKeys];
+    const csvLines = [header.join(',')];
+    rows.forEach(row => {
+      const vals = [row.cultureHour, ...columnKeys.map(k => row[k] !== undefined ? row[k] : '')];
+      csvLines.push(vals.join(','));
+    });
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'compare_chart_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const [formData, setFormData] = useState({
     temp_set: 38.0, temp_read: 38.0,
     ph_set: 7.00, ph_read: 7.00,
@@ -3082,7 +3136,32 @@ function App() {
 
                   {/* Chart Display Panel */}
                   <div className="glass-panel" style={{ padding: '1.5rem', height: '500px' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem' }}>2. กราฟเปรียบเทียบแนวโน้ม (เทียบชั่วโมงเลี้ยงเชื้อ Culture Hour)</h3>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                       <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>2. กราฟเปรียบเทียบแนวโน้ม (เทียบชั่วโมงเลี้ยงเชื้อ Culture Hour)</h3>
+                       {selectedCompareJobIds.length > 0 && (
+                         <button
+                           onClick={downloadCompareCSV}
+                           title="ดาวน์โหลดข้อมูลเป็น CSV"
+                           style={{
+                             display: 'flex', alignItems: 'center', gap: '6px',
+                             padding: '6px 14px',
+                             borderRadius: '8px',
+                             border: '1px solid rgba(34,197,94,0.4)',
+                             background: 'rgba(34,197,94,0.12)',
+                             color: '#4ade80',
+                             fontSize: '0.82rem',
+                             fontWeight: 600,
+                             cursor: 'pointer',
+                             transition: 'all 0.18s',
+                           }}
+                           onMouseEnter={e => { e.currentTarget.style.background='rgba(34,197,94,0.25)'; e.currentTarget.style.borderColor='rgba(34,197,94,0.7)'; }}
+                           onMouseLeave={e => { e.currentTarget.style.background='rgba(34,197,94,0.12)'; e.currentTarget.style.borderColor='rgba(34,197,94,0.4)'; }}
+                         >
+                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                           ดาวน์โหลด CSV
+                         </button>
+                       )}
+                     </div>
                     {selectedCompareJobIds.length === 0 ? (
                       <div style={{ display: 'flex', height: '80%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', gap: '0.5rem' }}>
                         <span style={{ fontSize: '2rem' }}>📊</span>
