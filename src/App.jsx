@@ -857,7 +857,13 @@ function App() {
   const [currentMachineId, setCurrentMachineId] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [currentJobId, setCurrentJobId] = useState(null);
-  const [isViewingHistory, setIsViewingHistory] = useState(false);
+  const [isViewingHistory, setIsViewingHistory] = useState(() => {
+    try {
+      return localStorage.getItem('bioprocess-is-viewing-history') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
   const [customers, setCustomers] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -1184,6 +1190,12 @@ function App() {
     }
   }, [currentJobId]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('bioprocess-is-viewing-history', isViewingHistory ? 'true' : 'false');
+    } catch (e) {}
+  }, [isViewingHistory]);
+
   // Apply theme to document and persist
   useEffect(() => {
     try {
@@ -1319,8 +1331,11 @@ function App() {
     if (userRole === 'customer' && activeCustomerJobId) {
       setCurrentJobId(activeCustomerJobId);
       const targetJob = jobs.find(j => j.id === activeCustomerJobId);
-      if (targetJob && targetJob.machineId) {
-        setCurrentMachineId(targetJob.machineId);
+      if (targetJob) {
+        if (targetJob.machineId) {
+          setCurrentMachineId(targetJob.machineId);
+        }
+        setIsViewingHistory(targetJob.status === 'finished');
       }
     }
   }, [userRole, activeCustomerJobId, jobs]);
@@ -2941,6 +2956,7 @@ function App() {
                           } else {
                             setCurrentJobId(null);
                           }
+                          setIsViewingHistory(false);
                           setCurrentAppView('monitoring');
                           setActiveTab('dashboard');
                         }}
