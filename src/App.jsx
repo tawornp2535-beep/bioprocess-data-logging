@@ -2076,7 +2076,8 @@ function App() {
   };
 
   // Export
-  const exportToCSV = (job = currentJob) => {
+  const exportToCSV = (passedJob) => {
+    const job = (passedJob && passedJob.id && passedJob.data) ? passedJob : currentJob;
     if (!job || !job.data || job.data.length === 0) {
       alert("ไม่มีข้อมูลที่จะส่งออก!");
       return;
@@ -2163,7 +2164,8 @@ function App() {
     }
   };
 
-  const exportToExcel = (job = currentJob) => {
+  const exportToExcel = (passedJob) => {
+    const job = (passedJob && passedJob.id && passedJob.data) ? passedJob : currentJob;
     if (!job || !job.data || job.data.length === 0) {
       alert("ไม่มีข้อมูลที่จะส่งออก!");
       return;
