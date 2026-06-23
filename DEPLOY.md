@@ -16,8 +16,10 @@ git push -u origin main
   - Connect your GitHub repository and select `main` branch.
   - Set the build command to: `npm ci && npm run build`
   - Set the start command to: `npm start` (or leave default since `start` exists).
-  - Add an environment variable `MONGODB_URI` with your MongoDB Atlas connection string.
+  - Add an environment variable `FIREBASE_SERVICE_ACCOUNT_JSON` with your Firebase Service Account JSON key (if using Firestore cloud database).
+  - Add an environment variable `GEMINI_API_KEY` with your Google Gemini API Key from Google AI Studio.
   - Deploy and Render will provide a public URL.
+
 
 3. If you prefer Docker:
   - Push to a registry (Docker Hub / GitHub Container Registry) and deploy to any provider that supports containers.

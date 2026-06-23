@@ -896,7 +896,53 @@ function App() {
   const [feedbackSuggestion, setFeedbackSuggestion] = useState('');
 
 
-  const [activeTab, setActiveTab] = useState('diagram'); // 'diagram' | 'dashboard' | 'combined' | 'table'
+  const [activeTab, setActiveTab] = useState('diagram'); // 'diagram' | 'dashboard' | 'combined' | 'table' | 'ai'
+  // AI Assistant States
+  const [aiReport, setAiReport] = useState('');
+  const [isAiReportLoading, setIsAiReportLoading] = useState(false);
+  const [aiChatMessages, setAiChatMessages] = useState([
+    { role: 'model', content: 'สวัสดีครับ ผมคือผู้ช่วย AI วิเคราะห์ข้อมูลกระบวนการทางชีวภาพ (Bioprocess AI Co-pilot) คุณสามารถคลิกให้ผมช่วยวิเคราะห์แนวโน้มและจุดผิดปกติ หรือพิมพ์สอบถามเกี่ยวกับข้อมูลรันนี้ได้เลยครับ!' }
+  ]);
+  const [aiNewMessage, setAiNewMessage] = useState('');
+  const [isAiChatLoading, setIsAiChatLoading] = useState(false);
+  const [isAiReportMock, setIsAiReportMock] = useState(false);
+  const [isAiChatMock, setIsAiChatMock] = useState(false);
+
+  const handleSendChipMessage = async (text) => {
+    await sendChatMessage(text);
+  };
+
+  const sendChatMessage = async (text) => {
+    const updatedMessages = [...aiChatMessages, { role: 'user', content: text }];
+    setAiChatMessages(updatedMessages);
+    setIsAiChatLoading(true);
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: currentJobId,
+          messages: updatedMessages.slice(1), // Exclude greeting
+          newMessage: text
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAiChatMessages(prev => [...prev, { role: 'model', content: data.response }]);
+        setIsAiChatMock(data.isMock);
+      } else {
+        setAiChatMessages(prev => [...prev, { role: 'model', content: 'ขออภัยครับ ไม่สามารถสร้างคำตอบได้ในขณะนี้เนื่องจากปัญหาทางระบบ' }]);
+      }
+    } catch (e) {
+      console.error(e);
+      setAiChatMessages(prev => [...prev, { role: 'model', content: 'ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์' }]);
+    } finally {
+      setIsAiChatLoading(false);
+    }
+  };
+
   // Theme: 'dark' | 'light'
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('bioprocess-theme') || 'dark';
@@ -3757,6 +3803,12 @@ function App() {
                     >
                       <TableIcon size={16} /> Table
                     </button>
+                    <button
+                      className={`nav-tab ${activeTab === 'ai' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('ai')}
+                    >
+                      <MessageSquare size={16} /> AI Assistant
+                    </button>
                   </div>
                 )}
               </div>
@@ -4339,6 +4391,210 @@ function App() {
                       {visibleParameters.air && <Line yAxisId="left" type="monotone" dataKey="air_set" name="AIR SV (L/M)" stroke="var(--accent-purple)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
                     </LineChart>
                   </ResponsiveContainer>
+                </div>
+              ) : activeTab === 'ai' ? (
+                <div className="ai-assistant-container" style={{ display: 'flex', gap: '1.5rem', height: '650px', flexDirection: window.innerWidth < 1024 ? 'column' : 'row' }}>
+                  {/* Left Column: AI Analyzer Report */}
+                  <div className="glass-panel ai-report-panel" style={{ flex: 1.2, display: 'flex', flexDirection: 'column', padding: '1.5rem', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+                      <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        🤖 AI Batch Insights & Report
+                      </h2>
+                      {aiReport && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            className="btn btn-secondary btn-small"
+                            onClick={() => {
+                              navigator.clipboard.writeText(aiReport);
+                              alert('คัดลอกรายงานลงคลิปบอร์ดแล้ว!');
+                            }}
+                          >
+                            Copy
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-small"
+                            onClick={() => {
+                              const printWindow = window.open('', '_blank');
+                              printWindow.document.write(`<html><head><title>AI Report - ${currentJob?.name}</title><style>body { font-family: sans-serif; padding: 2rem; line-height: 1.6; color: #333; } h1, h2, h3 { color: #1e3a8a; } pre { background: #f4f4f4; padding: 1rem; border-radius: 4px; }</style></head><body><h1>AI Analysis Report</h1><p><strong>Session:</strong> ${currentJob?.name} | <strong>Machine:</strong> ${currentMachine?.name}</p><hr/><div>${aiReport.replace(/\n/g, '<br/>')}</div></body></html>`);
+                              printWindow.document.close();
+                              printWindow.print();
+                            }}
+                          >
+                            Print
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', display: 'flex', flexDirection: 'column', justifyContent: aiReport ? 'flex-start' : 'center', alignItems: aiReport ? 'stretch' : 'center' }}>
+                      {isAiReportLoading ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', margin: 'auto' }}>
+                          <div className="ai-loading-pulse">🤖</div>
+                          <p style={{ color: 'var(--text-secondary)', fontWeight: 500, animation: 'pulse 1.5s infinite' }}>กำลังวิเคราะห์พารามิเตอร์และจัดทำรายงาน...</p>
+                        </div>
+                      ) : aiReport ? (
+                        <div className="ai-report-content" style={{ fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                          {aiReport.split('\n').map((line, i) => {
+                            if (line.startsWith('###')) {
+                              return <h3 key={i} style={{ color: 'white', marginTop: '1.25rem', marginBottom: '0.5rem', fontWeight: 700, fontSize: '1.1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>{line.replace('###', '').trim()}</h3>;
+                            }
+                            if (line.startsWith('####')) {
+                              return <h4 key={i} style={{ color: 'var(--accent-blue)', marginTop: '1rem', marginBottom: '0.4rem', fontWeight: 600, fontSize: '1rem' }}>{line.replace('####', '').trim()}</h4>;
+                            }
+                            if (line.startsWith('*   **') || line.startsWith('-   **') || line.startsWith('* **') || line.startsWith('- **')) {
+                              const match = line.match(/^[\*\-]\s+\*\*(.*?)\*\*(.*)$/);
+                              if (match) {
+                                return (
+                                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', margin: '4px 0', paddingLeft: '8px' }}>
+                                    <span style={{ color: 'var(--accent-purple)', marginRight: '8px', fontSize: '1.1rem', lineHeight: '1' }}>•</span>
+                                    <span><strong>{match[1]}</strong>{match[2]}</span>
+                                  </div>
+                                );
+                              }
+                            }
+                            if (line.startsWith('*') || line.startsWith('-')) {
+                              return (
+                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', margin: '4px 0', paddingLeft: '8px' }}>
+                                  <span style={{ color: 'var(--accent-purple)', marginRight: '8px', fontSize: '1.1rem', lineHeight: '1' }}>•</span>
+                                  <span>{line.substring(1).trim()}</span>
+                                </div>
+                              );
+                            }
+                            if (line.match(/^\d+\./)) {
+                              return (
+                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', margin: '6px 0', paddingLeft: '8px' }}>
+                                  <span style={{ color: 'var(--accent-blue)', marginRight: '8px', fontWeight: 600 }}>{line.match(/^\d+\./)[0]}</span>
+                                  <span>{line.replace(/^\d+\.\s*/, '')}</span>
+                                </div>
+                              );
+                            }
+                            return <p key={i} style={{ margin: '0.4rem 0', color: 'var(--text-primary)' }}>{line}</p>;
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem', maxWidth: '400px', margin: 'auto' }}>
+                          <div style={{ fontSize: '3rem', marginBottom: '1rem', filter: 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.4))' }}>🔬</div>
+                          <h3 style={{ marginBottom: '0.5rem', color: 'white' }}>พร้อมรายงานผลวิเคราะห์รอบรัน</h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>AI จะสแกนข้อมูลทั้งหมดในเซสชันนี้และวิเคราะห์หาแนวโน้ม ความผิดปกติ พร้อมคำแนะนำการผลิต</p>
+                          <button
+                            className="btn btn-blue"
+                            onClick={async () => {
+                              setIsAiReportLoading(true);
+                              try {
+                                const res = await fetch('/api/ai/analyze', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ jobId: currentJobId })
+                                });
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  setAiReport(data.report);
+                                  setIsAiReportMock(data.isMock);
+                                } else {
+                                  alert('ไม่สามารถวิเคราะห์ข้อมูลได้');
+                                }
+                              } catch (e) {
+                                console.error(e);
+                                alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+                              } finally {
+                                setIsAiReportLoading(false);
+                              }
+                            }}
+                          >
+                            🚀 เริ่มการวิเคราะห์ข้อมูล
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: AI Co-pilot Chatbot */}
+                  <div className="glass-panel ai-chat-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '1.5rem', overflow: 'hidden' }}>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
+                      💬 AI Bioprocess Chatbot
+                    </h2>
+
+                    {/* Chat Messages Area */}
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingRight: '0.5rem', marginBottom: '1rem' }}>
+                      {aiChatMessages.map((msg, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                            maxWidth: '85%',
+                            padding: '10px 14px',
+                            borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                            background: msg.role === 'user' ? 'linear-gradient(135deg, var(--accent-blue), #1e40af)' : 'rgba(255,255,255,0.06)',
+                            border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)',
+                            color: 'white',
+                            fontSize: '0.9rem',
+                            lineHeight: '1.4',
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                            whiteSpace: 'pre-wrap'
+                          }}
+                        >
+                          {msg.content}
+                        </div>
+                      ))}
+                      {isAiChatLoading && (
+                        <div style={{ alignSelf: 'flex-start', background: 'rgba(255,255,255,0.04)', padding: '10px 14px', borderRadius: '12px 12px 12px 2px', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                          <span className="typing-dots"><span>.</span><span>.</span><span>.</span></span> กำลังตอบกลับ
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Prompt suggestions / Chips */}
+                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px' }}>
+                      <button
+                        className="btn btn-secondary btn-small"
+                        style={{ whiteSpace: 'nowrap', borderRadius: '20px' }}
+                        disabled={isAiChatLoading}
+                        onClick={() => handleSendChipMessage('ตรวจสอบจุดผิดปกติในการรันนี้ให้หน่อย')}
+                      >
+                        🔍 เช็กจุดผิดปกติ
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-small"
+                        style={{ whiteSpace: 'nowrap', borderRadius: '20px' }}
+                        disabled={isAiChatLoading}
+                        onClick={() => handleSendChipMessage('ค่า pH และ DO ในรันนี้เป็นอย่างไรบ้าง')}
+                      >
+                        🧪 ดูค่า pH / DO
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-small"
+                        style={{ whiteSpace: 'nowrap', borderRadius: '20px' }}
+                        disabled={isAiChatLoading}
+                        onClick={() => handleSendChipMessage('ขอคำแนะนำในการคุมการกวนและการจ่ายอากาศ')}
+                      >
+                        ⚙️ แนะนำการกวน/จ่ายลม
+                      </button>
+                    </div>
+
+                    {/* Chat Input Field */}
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!aiNewMessage.trim() || isAiChatLoading) return;
+                        const userText = aiNewMessage;
+                        setAiNewMessage('');
+                        await sendChatMessage(userText);
+                      }}
+                      style={{ display: 'flex', gap: '8px' }}
+                    >
+                      <input
+                        type="text"
+                        value={aiNewMessage}
+                        onChange={(e) => setAiNewMessage(e.target.value)}
+                        placeholder="พิมพ์ถามผู้ช่วย AI ของคุณ..."
+                        disabled={isAiChatLoading}
+                        style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.4)', color: 'white', fontSize: '0.9rem' }}
+                      />
+                      <button type="submit" className="btn btn-blue" disabled={isAiChatLoading || !aiNewMessage.trim()} style={{ margin: 0 }}>
+                        ส่ง
+                      </button>
+                    </form>
+                  </div>
                 </div>
               ) : (
                 <div className="glass-panel" style={{ padding: '2rem' }}>

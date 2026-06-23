@@ -987,6 +987,217 @@ app.delete('/api/customers/:id', async (req, res) => {
   res.json(await getDB());
 });
 
+// ── AI Integration (Gemini API) ───────────────────────────
+
+app.post('/api/ai/analyze', async (req, res) => {
+  const { jobId } = req.body;
+  if (!jobId) {
+    return res.status(400).json({ error: 'Job ID is required' });
+  }
+
+  const dbData = await getDB();
+  const job = dbData.jobs.find(j => j.id === jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  const machine = dbData.machines.find(m => m.id === job.machineId);
+  const machineName = machine ? machine.name : 'Unknown Machine';
+
+  // Format data points for prompt
+  let dataSummary = 'ไม่มีข้อมูลบันทึกในเซสชันนี้';
+  if (job.data && job.data.length > 0) {
+    // Sort chronologically
+    const sortedData = [...job.data].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+    
+    // Convert to a neat table representation
+    const rows = sortedData.map((row, idx) => {
+      // Find culture hour
+      let cultureHour = 0;
+      const firstTime = new Date(sortedData[0].timestamp).getTime();
+      const currTime = new Date(row.timestamp).getTime();
+      if (!isNaN(firstTime) && !isNaN(currTime)) {
+        cultureHour = ((currTime - firstTime) / 3600000).toFixed(1);
+      }
+      
+      const tempStr = `Temp: ${row.temp_read || 0}/${row.temp_set || 0}`;
+      const phStr = `pH: ${row.ph_read || 0}/${row.ph_set || 0}`;
+      const doStr = `DO: ${row.do_read || 0}/${row.do_set || 0}`;
+      const agitStr = `Agit: ${row.agit_read || 0}/${row.agit_set || 0}`;
+      const airStr = `Air: ${row.air_read || 0}/${row.air_set || 0}`;
+      const remarkStr = row.remark ? `Remark: ${row.remark}` : '';
+      
+      return `ชม.ที่ ${cultureHour} (${row.time || ''}) | ${tempStr} | ${phStr} | ${doStr} | ${agitStr} | ${airStr} | ${remarkStr}`;
+    });
+    
+    dataSummary = rows.join('\n');
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || '';
+
+  if (!apiKey) {
+    // Return high-fidelity mock data if API key is not configured
+    const mockReport = `### 🤖 รายงานวิเคราะห์โดย AI (Simulated Mode)
+*หมายเหตุ: คุณยังไม่ได้กำหนดค่า \`GEMINI_API_KEY\` ในระบบ ระบบจึงแสดงรายงานจำลองคุณภาพสูงนี้ให้ทดลองใช้งาน*
+
+#### 1. บทสรุปผู้บริหาร (Executive Summary)
+เซสชัน **"${job.name}"** ของเครื่องมือ **"${machineName}"** แสดงถึงกระบวนการหมักเบื้องต้นที่มีเสถียรภาพ อัตราการเติบโตของเซลล์เป็นไปตามแบบจำลองมาตรฐาน และค่าพารามิเตอร์ส่วนใหญ่ควบคุมได้ดีตามค่าเป้าหมาย (Set Value)
+
+#### 2. การวิเคราะห์แนวโน้มพารามิเตอร์ (Trend Analysis)
+*   **อุณหภูมิ (Temperature):** ควบคุมได้คงที่รอบๆ 37.0°C - 38.0°C สอดคล้องกับค่าเป้าหมายตลอดรันการผลิต
+*   **ค่า pH:** มีแนวโน้มลดลงเล็กน้อยตามธรรมชาติเมื่อเกิดเมตาบอลิซึมของเซลล์ ระบบควบคุมอัตโนมัติสามารถทำงานเพื่อชดเชยการลดลงได้อย่างสมดุล
+*   **ออกซิเจนละลาย (DO) & อัตราการกวน (Agitation):** เมื่อเซลล์มีความหนาแน่นสูงขึ้น (ชั่วโมงที่ 0.1-0.2) ความต้องการออกซิเจนจะเพิ่มขึ้น ส่งผลให้ระดับ DO เริ่มลดต่ำลง ซึ่งความเร็วรอบการกวน (Agitator RPM) ได้รันอยู่ที่ระดับตั้งไว้เพื่อพยุงระดับ DO
+
+#### 3. การตรวจพบสิ่งผิดปกติ (Anomaly Detection)
+*   ⚠️ **ตรวจพบค่า DO ลดลงรวดเร็ว:** ในจุดบันทึกล่าสุด ค่า DO ตกลงมาอย่างรวดเร็วเนื่องจากการใช้ออกซิเจนของเซลล์ที่โตขึ้น ควรคอยสังเกตการณ์หากค่า DO ลดต่ำกว่า 30%
+*   💬 **บันทึกกิจกรรม:** มีการบันทึกการเติม *Antifoam* ที่ชั่วโมงการเพาะเลี้ยงล่าสุดเพื่อควบคุมฟอง ซึ่งถือว่าทำได้ทันเวลา
+
+#### 4. คำแนะนำในการปรับปรุง (Optimization Recommendations)
+1.  **การปรับอากาศ (Aeration):** หากระดับ DO ลดต่ำกว่า 40% ให้พิจารณาเพิ่มอัตราไหลอากาศลม (Air Flow Rate) จากเดิมขึ้นอีก 10-20% หรือจ่ายแก๊สออกซิเจนบริสุทธิ์เข้าระบบ
+2.  **อัตราการกวน (Agitation):** เพิ่มรอบการกวนทีละน้อยหากระดับ DO ยังคงลดต่ำลง เพื่อเสริมอัตราการละลายออกซิเจน (Mass Transfer Coefficient, kLa)`;
+
+    return res.json({ report: mockReport, isMock: true });
+  }
+
+  try {
+    const prompt = `คุณคือผู้เชี่ยวชาญด้านกระบวนการทางชีวภาพ (Bioprocess Expert) และวิศวกรควบคุมระบบถังหมัก
+วิเคราะห์ข้อมูลการรันถังหมัก (Bioreactor) ดังต่อไปนี้:
+ชื่อเซสชัน: ${job.name}
+เครื่องมือ: ${machineName}
+เวลาที่เริ่มสร้างรัน: ${job.createdAt}
+
+ข้อมูลตัวชี้วัดกระบวนการ (เรียงตามเวลา):
+ชั่วโมงเพาะเลี้ยง (เวลาบันทึก) | อุณหภูมิ (Read/Set) | pH (Read/Set) | DO (Read/Set) | Agitation (Read/Set) | Air Flow (Read/Set) | บันทึกเพิ่มเติม
+${dataSummary}
+
+กรุณาเขียนรายงานวิเคราะห์รายละเอียดเป็นภาษาไทยในรูปแบบ Markdown ประกอบด้วยหัวข้อดังนี้:
+1. **บทสรุปผู้บริหาร (Executive Summary)**: สรุปภาพรวมความสมบูรณ์ของการรันและผลผลิตโดยรวม
+2. **การวิเคราะห์แนวโน้มพารามิเตอร์ (Parameter Trend Analysis)**: เจาะลึกแนวโน้มของอุณหภูมิ, pH, DO, อัตรากวน และการจ่ายลม
+3. **การตรวจพบสิ่งผิดปกติ (Anomaly Detection)**: ระบุจุดเบี่ยงเบนหรือความผิดปกติใดๆ (เช่น สัญญาณพารามิเตอร์แกว่ง, ค่าตกลงรวดเร็ว, การเติมสารชดเชยล่าช้า) หรือยืนยันว่ารันปกติดี
+4. **ข้อเสนอแนะในการควบคุมกระบวนการ (Optimization Recommendations)**: ข้อแนะนำที่เป็นรูปธรรมสำหรับการปรับจูนค่าพารามิเตอร์ถัดไปเพื่อเพิ่มความเสถียรและ Yield`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Gemini API Error details:', errorData);
+      throw new Error(errorData.error?.message || 'Failed to call Gemini API');
+    }
+
+    const data = await response.json();
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'ไม่สามารถดึงข้อมูลรายงานวิเคราะห์ได้';
+    res.json({ report: textResponse, isMock: false });
+  } catch (err) {
+    console.error('Gemini API Error:', err.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเรียกใช้ AI: ' + err.message });
+  }
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+  const { jobId, messages, newMessage } = req.body;
+  if (!jobId || !newMessage) {
+    return res.status(400).json({ error: 'Job ID and newMessage are required' });
+  }
+
+  const dbData = await getDB();
+  const job = dbData.jobs.find(j => j.id === jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  const machine = dbData.machines.find(m => m.id === job.machineId);
+  const machineName = machine ? machine.name : 'Unknown Machine';
+
+  // Format data points for context
+  let dataSummary = 'ไม่มีข้อมูลบันทึกในเซสชันนี้';
+  if (job.data && job.data.length > 0) {
+    const sortedData = [...job.data].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+    const rows = sortedData.map((row, idx) => {
+      let cultureHour = 0;
+      const firstTime = new Date(sortedData[0].timestamp).getTime();
+      const currTime = new Date(row.timestamp).getTime();
+      if (!isNaN(firstTime) && !isNaN(currTime)) {
+        cultureHour = ((currTime - firstTime) / 3600000).toFixed(1);
+      }
+      return `ชม.ที่ ${cultureHour} (${row.time || ''}) | Temp: ${row.temp_read}/${row.temp_set} | pH: ${row.ph_read}/${row.ph_set} | DO: ${row.do_read}/${row.do_set} | Agit: ${row.agit_read}/${row.agit_set} | Air: ${row.air_read}/${row.air_set} | ${row.remark || ''}`;
+    });
+    dataSummary = rows.join('\n');
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || '';
+
+  if (!apiKey) {
+    // Return mock response
+    let mockResponse = `🤖 ผู้ช่วย AI (Simulated Mode): ขออภัยครับ ปัจจุบันระบบไม่ได้เชื่อมโยง \`GEMINI_API_KEY\` สำหรับคุยสด 
+แต่จากข้อมูลจำลองกระบวนการผลิต "${job.name}" ค่า pH อยู่ที่ ${job.data[job.data.length - 1]?.ph_read || 7.0} และอุณหภูมิปัจจุบันคือ ${job.data[job.data.length - 1]?.temp_read || 37.0}°C ซึ่งเป็นค่าที่เหมาะสมสำหรับการเจริญเติบโตของจุลินทรีย์ครับ! 
+(โปรดตั้งค่า GEMINI_API_KEY ในไฟล์ .env หรือ Render Dashboard เพื่อแชตกับ AI จริง)`;
+    
+    if (newMessage.includes('ผิดปกติ') || newMessage.toLowerCase().includes('anomaly')) {
+      mockResponse = `🤖 ผู้ช่วย AI (Simulated Mode): จากการสแกนข้อมูลเบื้องต้น ค่า DO ในชั่วโมงสุดท้ายลดลงค่อนข้างเร็ว และพบการเติม Antifoam ครับ แต่อุณหภูมิและพารามิเตอร์อื่นๆ ยังคงสมบูรณ์ดีครับ`;
+    } else if (newMessage.includes('pH') || newMessage.includes('ph')) {
+      mockResponse = `🤖 ผู้ช่วย AI (Simulated Mode): ค่า pH ปัจจุบันรันอยู่ที่ ${job.data[job.data.length - 1]?.ph_read || 7.00} โดยมีค่าเป้าหมายคือ ${job.data[job.data.length - 1]?.ph_set || 7.00} ซึ่งทำงานสอดคล้องสัมพันธ์กันดีครับ`;
+    }
+    
+    return res.json({ response: mockResponse, isMock: true });
+  }
+
+  try {
+    // Formulate system prompt with grounding context
+    const systemPrompt = `คุณคือผู้ช่วย AI ด้านกระบวนการทางชีวภาพ (Bioprocess AI Co-pilot) ประจำห้องแล็บถังหมัก
+คุณคอยช่วยเหลือโอเปอเรเตอร์และตอบคำถามเกี่ยวกับรอบรันถังหมักชื่อ "${job.name}" (เครื่องมือ: "${machineName}")
+นี่คือตารางข้อมูลบันทึกในถังหมักล่าสุด (เรียงตามเวลา):
+ชั่วโมงเพาะเลี้ยง (เวลาบันทึก) | อุณหภูมิ (Read/Set) | pH (Read/Set) | DO (Read/Set) | Agit (Read/Set) | Air (Read/Set) | บันทึกเพิ่มเติม
+${dataSummary}
+
+กรุณาตอบคำถามของผู้ใช้งานโดยวิเคราะห์อิงจากข้อมูลด้านบน ตอบคำถามกระชับ เข้าใจง่าย และให้คำแนะนำเชิงวิชาการ/วิศวกรรมที่ถูกต้อง เป็นกันเองและเป็นมืออาชีพ ตอบเป็นภาษาไทย`;
+
+    // Map message history to Gemini API format
+    const contents = [];
+    
+    // Add history
+    if (messages && Array.isArray(messages)) {
+      messages.forEach(msg => {
+        contents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }]
+        });
+      });
+    }
+
+    // Add current query, but prefix it with system instructions to ensure it remains grounded in the data
+    const lastPromptText = `${systemPrompt}\n\nคำถามล่าสุดของผู้ใช้งาน: ${newMessage}`;
+    contents.push({
+      role: 'user',
+      parts: [{ text: lastPromptText }]
+    });
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Gemini API Error details:', errorData);
+      throw new Error(errorData.error?.message || 'Failed to call Gemini API');
+    }
+
+    const data = await response.json();
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'ขออภัยครับ ไม่สามารถสร้างคำตอบได้ในขณะนี้';
+    res.json({ response: textResponse, isMock: false });
+  } catch (err) {
+    console.error('Gemini API Error:', err.message);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเรียกใช้ AI: ' + err.message });
+  }
+});
+
 // ──────────────────────────────────────────────────────────
 // Serve static frontend files from 'dist' directory
 // ──────────────────────────────────────────────────────────
