@@ -5,8 +5,8 @@ import jsPDF from 'jspdf';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { 
-  Activity, Droplets, Wind, Thermometer, RotateCw, PlusCircle, 
+import {
+  Activity, Droplets, Wind, Thermometer, RotateCw, PlusCircle,
   Download, LayoutDashboard, LineChart as ChartIcon, FolderPlus, Trash2, FolderOpen,
   Table as TableIcon, Users, Activity as ActivityIcon, Edit3,
   ChevronDown, ChevronUp, ChevronRight, Settings, LogOut, Cpu, Database, Folder,
@@ -19,9 +19,9 @@ import './table.css';
 
 const getElapsedHours = (job, dataPointTimestamp) => {
   if (!job || !dataPointTimestamp) return 0;
-  
+
   let startTimeMs = null;
-  
+
   // Find the earliest timestamp among all data points in this job as the start time (Time Zero)
   if (job.data && job.data.length > 0) {
     let minTimeMs = Infinity;
@@ -37,7 +37,7 @@ const getElapsedHours = (job, dataPointTimestamp) => {
       startTimeMs = minTimeMs;
     }
   }
-  
+
   // Fallback to Job ID or Job creation time if no data points have valid timestamps
   if (!startTimeMs) {
     if (job.id && typeof job.id === 'string' && job.id.startsWith('job-')) {
@@ -53,12 +53,12 @@ const getElapsedHours = (job, dataPointTimestamp) => {
       }
     }
   }
-  
+
   if (!startTimeMs) return 0;
-  
+
   const recordTimeMs = new Date(dataPointTimestamp).getTime();
   if (isNaN(recordTimeMs)) return 0;
-  
+
   const diffMs = recordTimeMs - startTimeMs;
   const hours = diffMs / (1000 * 60 * 60);
   return Math.max(0, parseFloat(hours.toFixed(1)));
@@ -94,7 +94,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // BSTR Diagram Component
-const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole }) => {
+const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory }) => {
   if (!dataPoint) {
     return (
       <div className="glass-panel empty-state" style={{ height: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -132,8 +132,8 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
     return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   };
 
-  const timestampStr = dataPoint.timestamp 
-    ? new Date(dataPoint.timestamp).toLocaleString('th-TH') 
+  const timestampStr = dataPoint.timestamp
+    ? new Date(dataPoint.timestamp).toLocaleString('th-TH')
     : `${dataPoint.date || ''} ${dataPoint.time || ''}`;
 
   // Helper to draw inline SVG sparklines
@@ -147,7 +147,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
         </div>
       );
     }
-    
+
     const points = data.map((d, i) => {
       const val = d[key] !== undefined ? d[key] : 0;
       const x = (i / Math.max(1, data.length - 1)) * width;
@@ -183,19 +183,20 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   }
 
   const isMachineStopped = jobStatus === 'stopped' || jobStatus === 'finished';
+  const isMachineStoppedVisual = isMachineStopped && !isReplaying && !isViewingHistory;
 
   // Impeller spinner speed calculation (CSS custom property)
-  const agitSpeedSec = !isMachineStopped && agit_read > 0 ? Math.max(0.1, 60 / agit_read) : 0;
+  const agitSpeedSec = !isMachineStoppedVisual && agit_read > 0 ? Math.max(0.1, 60 / agit_read) : 0;
   const agitSpinStyle = agitSpeedSec > 0 ? {
     animation: `spin-blade ${agitSpeedSec}s linear infinite`,
     transformOrigin: '150px 240px'
   } : {};
 
   // Bubbling animation styling based on Air Flow
-  const airBubbleCount = !isMachineStopped && air_read > 0 ? Math.min(20, Math.floor(air_read * 3) + 2) : 0;
+  const airBubbleCount = !isMachineStoppedVisual && air_read > 0 ? Math.min(20, Math.floor(air_read * 3) + 2) : 0;
 
   // Heating power color intensity mapping for the jacket glow
-  const heatReadForVisual = isMachineStopped ? 0 : heat_read;
+  const heatReadForVisual = isMachineStoppedVisual ? 0 : heat_read;
   const jacketOpacity = Math.min(0.8, Math.max(0.1, heatReadForVisual / 100));
 
   return (
@@ -224,10 +225,10 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
 
       {/* 2. MAIN HMI DISPLAY AREA */}
       <div className="diagram-main-grid">
-        
+
         {/* Left Side: Overlaid Sensor Callout Boxes */}
         <div className="diagram-sensors-col">
-          
+
           {/* pH Sensor Box */}
           <div className="sensor-callout-card ph-sensor-callout">
             <div className="sensor-callout-header">
@@ -284,7 +285,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
 
         {/* Center: Scalable Reactor SVG Vessel */}
         <div className="diagram-reactor-vessel-col">
-          
+
           <svg className="reactor-vessel-svg" viewBox="0 0 300 480" width="100%" height="100%">
             <defs>
               {/* Metallic Gradients */}
@@ -307,7 +308,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             </defs>
 
             {/* Heating Jacket Glow (Wrapper behind reactor) */}
-            {!isMachineStopped && heat_read > 0 && (
+            {!isMachineStoppedVisual && heat_read > 0 && (
               <path
                 d="M 68 180 L 68 340 A 82 82 0 0 0 232 340 L 232 180 Z"
                 fill="url(#jacket-grad)"
@@ -435,7 +436,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
           <div className="motor-drive-display">
             <span className="display-label">MOTOR RPM</span>
             <div className="display-screen">
-              <span className="screen-val">{isMachineStopped ? 0 : Math.round(agit_read)}</span>
+              <span className="screen-val">{isMachineStoppedVisual ? 0 : Math.round(agit_read)}</span>
               <span className="screen-unit">RPM</span>
             </div>
             <span className="display-sv">SV: {Math.round(agit_set)}</span>
@@ -464,7 +465,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
         {/* Right Side: Detailed Progress Bar Gauges */}
         <div className="diagram-gauges-col">
           <div className="gauges-panel-card">
-            
+
             {/* Volume Gauge */}
             <div className="gauge-item">
               <div className="gauge-label-row">
@@ -608,7 +609,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
 
       {/* 3. BOTTOM SPARKLINE TRENDS PANEL */}
       <div className="diagram-sparklines-row">
-        
+
         {/* Sparkline 1: Volume */}
         <div className="sparkline-card">
           <span className="sparkline-title">VOLUME (%)</span>
@@ -719,8 +720,8 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
       <div className="diagram-status-footer-bar">
         <div className="status-indicator-tag">
           STATUS: <span className={`status-badge-val ${isReplaying ? (isReplayingPlaying ? 'replaying-badge' : 'paused-badge') : (jobStatus === 'finished' ? 'stopped-badge' : isMachineStopped ? 'stopped-badge' : 'running-badge')}`}>
-            {isReplaying 
-              ? (isReplayingPlaying ? 'PLAYBACK' : 'PAUSED') 
+            {isReplaying
+              ? (isReplayingPlaying ? 'PLAYBACK' : 'PAUSED')
               : (jobStatus === 'finished' ? 'FINISHED' : isMachineStopped ? 'STOPPED' : 'RUNNING')}
           </span>
         </div>
@@ -807,8 +808,8 @@ function App() {
   const [activeUsers, setActiveUsers] = useState([]);
 
   useEffect(() => {
-    const checkStandalone = window.navigator.standalone === true || 
-                            window.matchMedia('(display-mode: standalone)').matches;
+    const checkStandalone = window.navigator.standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches;
     setIsStandalone(checkStandalone);
 
     const handleBeforeInstallPrompt = (e) => {
@@ -857,13 +858,7 @@ function App() {
   const [currentMachineId, setCurrentMachineId] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [currentJobId, setCurrentJobId] = useState(null);
-  const [isViewingHistory, setIsViewingHistory] = useState(() => {
-    try {
-      return localStorage.getItem('bioprocess-is-viewing-history') === 'true';
-    } catch (e) {
-      return false;
-    }
-  });
+  const [isViewingHistory, setIsViewingHistory] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -936,10 +931,10 @@ function App() {
     try {
       const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
       const link = document.createElement('a');
-      link.download = 'compare_chart_' + new Date().toISOString().slice(0,10) + '.png';
+      link.download = 'compare_chart_' + new Date().toISOString().slice(0, 10) + '.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
-    } catch(e) { console.error('Export image error', e); }
+    } catch (e) { console.error('Export image error', e); }
   };
 
   // Export chart panel as PDF
@@ -953,8 +948,8 @@ function App() {
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = (canvas.height / canvas.width) * pdfW;
       pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
-      pdf.save('compare_chart_' + new Date().toISOString().slice(0,10) + '.pdf');
-    } catch(e) { console.error('Export PDF error', e); }
+      pdf.save('compare_chart_' + new Date().toISOString().slice(0, 10) + '.pdf');
+    } catch (e) { console.error('Export PDF error', e); }
   };
   // Download compare chart data as CSV
   const downloadCompareCSV = () => {
@@ -1005,7 +1000,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'compare_chart_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.download = 'compare_chart_' + new Date().toISOString().slice(0, 10) + '.csv';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1076,19 +1071,19 @@ function App() {
         if (data.activeUsers) {
           setActiveUsers(data.activeUsers);
         }
-        
+
         if (shouldAutoSelect) {
           const savedMachineId = localStorage.getItem('bioprocess-current-machine');
           const savedJobId = localStorage.getItem('bioprocess-current-job');
-          
-          const targetMachineId = savedMachineId && data.machines.some(m => m.id === savedMachineId) 
-            ? savedMachineId 
+
+          const targetMachineId = savedMachineId && data.machines.some(m => m.id === savedMachineId)
+            ? savedMachineId
             : (data.machines[0]?.id || null);
-            
+
           const targetJobId = savedJobId && data.jobs.some(j => j.id === savedJobId)
             ? savedJobId
             : (data.jobs.filter(j => j.machineId === targetMachineId)[0]?.id || null);
-            
+
           setCurrentMachineId(targetMachineId);
           setCurrentJobId(targetJobId);
         }
@@ -1190,12 +1185,6 @@ function App() {
     }
   }, [currentJobId]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('bioprocess-is-viewing-history', isViewingHistory ? 'true' : 'false');
-    } catch (e) {}
-  }, [isViewingHistory]);
-
   // Apply theme to document and persist
   useEffect(() => {
     try {
@@ -1207,7 +1196,7 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    try { localStorage.setItem('bioprocess-customer-notice-ack', dontShowAgain ? 'true' : 'false'); } catch (e) {}
+    try { localStorage.setItem('bioprocess-customer-notice-ack', dontShowAgain ? 'true' : 'false'); } catch (e) { }
   }, [dontShowAgain]);
 
   // Ensure customer form has a valid machineId selected
@@ -1256,8 +1245,8 @@ function App() {
     air_set: row.air_set !== undefined ? row.air_set : row.air,
     level_set: row.level_set !== undefined && row.level_set !== null ? row.level_set : 65.0,
     level_read: row.level_read !== undefined && row.level_read !== null ? row.level_read : 65.0,
-    air_out_set: row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(( (row.air_set !== undefined ? row.air_set : row.air || 0) * 0.96 ).toFixed(2)),
-    air_out_read: row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(( (row.air_read !== undefined ? row.air_read : row.air || 0) * 0.96 ).toFixed(2)),
+    air_out_set: row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((row.air_set !== undefined ? row.air_set : row.air || 0) * 0.96).toFixed(2)),
+    air_out_read: row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((row.air_read !== undefined ? row.air_read : row.air || 0) * 0.96).toFixed(2)),
     heat_set: row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
     heat_read: row.heat_read !== undefined && row.heat_read !== null ? row.heat_read : 0.0,
     remark: row.remark !== undefined ? row.remark : ''
@@ -1331,11 +1320,8 @@ function App() {
     if (userRole === 'customer' && activeCustomerJobId) {
       setCurrentJobId(activeCustomerJobId);
       const targetJob = jobs.find(j => j.id === activeCustomerJobId);
-      if (targetJob) {
-        if (targetJob.machineId) {
-          setCurrentMachineId(targetJob.machineId);
-        }
-        setIsViewingHistory(targetJob.status === 'finished');
+      if (targetJob && targetJob.machineId) {
+        setCurrentMachineId(targetJob.machineId);
       }
     }
   }, [userRole, activeCustomerJobId, jobs]);
@@ -1362,7 +1348,7 @@ function App() {
     if (userRole === 'customer') {
       setShowCustomerToast(true);
       setIsToastHiding(false);
-      
+
       const hideTimer = setTimeout(() => {
         setIsToastHiding(true);
       }, 14400);
@@ -1516,7 +1502,7 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         applyDBUpdate(data);
-        
+
         const newMachine = data.machines[data.machines.length - 1];
         if (newMachine) {
           setCurrentMachineId(newMachine.id);
@@ -1569,7 +1555,7 @@ function App() {
   const deleteMachine = async () => {
     const activeMachine = machines.find(m => m.id === currentMachineId);
     if (!activeMachine) return;
-    
+
     if (machines.length <= 1) {
       alert("You must keep at least one machine.");
       return;
@@ -1583,10 +1569,10 @@ function App() {
         if (res.ok) {
           const data = await res.json();
           applyDBUpdate(data);
-          
+
           const nextMachineId = data.machines[0]?.id || null;
           setCurrentMachineId(nextMachineId);
-          
+
           const nextMachineJobs = data.jobs.filter(j => j.machineId === nextMachineId);
           setCurrentJobId(nextMachineJobs.length > 0 ? nextMachineJobs[0].id : null);
         }
@@ -1883,9 +1869,9 @@ function App() {
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'number' ? (parseFloat(value) || 0) : value 
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? (parseFloat(value) || 0) : value
     }));
   };
 
@@ -1909,8 +1895,8 @@ function App() {
     );
     // Reset remark and update date/time to now
     const resetNow = new Date();
-    setFormData(prev => ({ 
-      ...prev, 
+    setFormData(prev => ({
+      ...prev,
       remark: '',
       date: resetNow.toLocaleDateString('en-CA'),
       time: toHHMM(resetNow)
@@ -1931,7 +1917,7 @@ function App() {
     date = ''
   ) => {
     if (!currentJobId) return;
-    
+
     // Construct local timestamp on client side to avoid server-side timezone shifts
     let timestamp = new Date().toISOString();
     if (date && time) {
@@ -1987,7 +1973,7 @@ function App() {
   const handleAddCustomer = async (e) => {
     e.preventDefault();
     if (!customerFormData.companyName.trim()) return alert("Please enter a company name.");
-    
+
     try {
       const res = await fetch('/api/customers', {
         method: 'POST',
@@ -2096,10 +2082,10 @@ function App() {
       'Date',
       'Time',
       'Culture Hour (Hr)',
-      'Temp SV (C)', 'Temp PV (C)', 
-      'pH SV', 'pH PV', 
-      'DO SV (%)', 'DO PV (%)', 
-      'Agit SV (RPM)', 'Agit PV (RPM)', 
+      'Temp SV (C)', 'Temp PV (C)',
+      'pH SV', 'pH PV',
+      'DO SV (%)', 'DO PV (%)',
+      'Agit SV (RPM)', 'Agit PV (RPM)',
       'Air Flow SV (L/M)', 'Air Flow PV (L/M)',
       'Volume SV (%)', 'Volume PV (%)',
       'Air Out SV (L/M)', 'Air Out PV (L/M)',
@@ -2132,13 +2118,13 @@ function App() {
       const rem = row.remark !== undefined ? row.remark : '';
 
       const values = [
-        `"${dateVal}"`, 
-        `"${timeVal}"`, 
+        `"${dateVal}"`,
+        `"${timeVal}"`,
         hrVal,
-        t_s, t_r, 
-        p_s, p_r, 
-        d_s, d_r, 
-        ag_s, ag_r, 
+        t_s, t_r,
+        p_s, p_r,
+        d_s, d_r,
+        ag_s, ag_r,
         ai_s, ai_r,
         lv_s, lv_r,
         ao_s, ao_r,
@@ -2179,7 +2165,7 @@ function App() {
 
     const isCurrent = job.id === currentJob?.id;
     const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
-    
+
     const sheetData = rowsToExport.map(row => {
       const ai_s = row.air_set !== undefined ? row.air_set : row.air;
       const ai_r = row.air_read !== undefined ? row.air_read : row.air;
@@ -2210,7 +2196,7 @@ function App() {
     const worksheet = XLSX.utils.json_to_sheet(sheetData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Bioprocess Records");
-    
+
     // Auto-fit column widths
     const max_widths = [];
     sheetData.forEach(row => {
@@ -2275,10 +2261,10 @@ function App() {
                   alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
                 }
               }} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <input 
-                  type="password" 
-                  name="adminPassword" 
-                  placeholder="รหัสผ่านแอดมิน" 
+                <input
+                  type="password"
+                  name="adminPassword"
+                  placeholder="รหัสผ่านแอดมิน"
                   style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.5)', color: 'white' }}
                 />
                 <button type="submit" className="submit-btn" style={{ width: '100%', height: '40px' }}>เข้าสู่ระบบแอดมิน</button>
@@ -2333,10 +2319,10 @@ function App() {
                   alert('เกิดข้อผิดพลาดขณะตรวจสอบรหัสงาน กรุณาลองใหม่');
                 }
               }} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <input 
-                  type="text" 
-                  name="jobCode" 
-                  placeholder="ป้อนรหัสงานของคุณ (เช่น job-...)" 
+                <input
+                  type="text"
+                  name="jobCode"
+                  placeholder="ป้อนรหัสงานของคุณ (เช่น job-...)"
                   style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'rgba(15, 23, 42, 0.5)', color: 'white' }}
                 />
                 <button type="submit" className="submit-btn" style={{ width: '100%', height: '40px', background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)' }}>เข้าดูข้อมูลงาน</button>
@@ -2361,7 +2347,7 @@ function App() {
                   <button onClick={() => { setShowCustomerNotice(false); setPendingJobCode(null); }} className="submit-btn" style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>ยกเลิก</button>
                   <button onClick={async () => {
                     if (dontShowAgain) {
-                      try { localStorage.setItem('bioprocess-customer-notice-ack', 'true'); } catch (e) {}
+                      try { localStorage.setItem('bioprocess-customer-notice-ack', 'true'); } catch (e) { }
                     }
                     if (pendingJobCode) {
                       try {
@@ -2440,25 +2426,25 @@ function App() {
                 <button onClick={() => { setShowCustomerNotice(false); setPendingJobCode(null); }} className="submit-btn" style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>ยกเลิก</button>
                 <button onClick={async () => {
                   if (dontShowAgain) {
-                      try { localStorage.setItem('bioprocess-customer-notice-ack', 'true'); } catch (e) {}
-                    }
-                    if (pendingJobCode) {
-                      // Refresh DB before granting access to ensure currentJobId/machine are set
-                      try {
-                        const res = await fetch('/api/db');
-                        if (res.ok) {
-                          const data = await res.json();
-                          setMachines(data.machines);
-                          setJobs(data.jobs);
-                          setCustomers(data.customers);
-                        }
-                      } catch (e) {
-                        console.error('Failed to refresh DB before customer access', e);
+                    try { localStorage.setItem('bioprocess-customer-notice-ack', 'true'); } catch (e) { }
+                  }
+                  if (pendingJobCode) {
+                    // Refresh DB before granting access to ensure currentJobId/machine are set
+                    try {
+                      const res = await fetch('/api/db');
+                      if (res.ok) {
+                        const data = await res.json();
+                        setMachines(data.machines);
+                        setJobs(data.jobs);
+                        setCustomers(data.customers);
                       }
-                      setActiveCustomerJobId(pendingJobCode);
-                      setUserRole('customer');
-                      setCurrentAppView('monitoring');
+                    } catch (e) {
+                      console.error('Failed to refresh DB before customer access', e);
                     }
+                    setActiveCustomerJobId(pendingJobCode);
+                    setUserRole('customer');
+                    setCurrentAppView('monitoring');
+                  }
                   setShowCustomerNotice(false);
                   setPendingJobCode(null);
                 }} className="submit-btn">ยอมรับและเข้าสู่ระบบ</button>
@@ -2469,7 +2455,7 @@ function App() {
       )}
       {/* Mobile Header Bar */}
       <div className="mobile-topbar">
-        <button 
+        <button
           onClick={() => setIsMobileMenuOpen(true)}
           style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
         >
@@ -2486,8 +2472,8 @@ function App() {
 
       {/* Backdrop overlay for mobile menu */}
       {isMobileMenuOpen && (
-        <div 
-          className="mobile-overlay" 
+        <div
+          className="mobile-overlay"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -2505,7 +2491,7 @@ function App() {
               </div>
             </div>
             {/* Close button on mobile sidebar header */}
-            <button 
+            <button
               onClick={() => setIsMobileMenuOpen(false)}
               style={{ background: 'transparent', border: 'none', color: '#84b2bc', cursor: 'pointer', display: 'none' }}
               className="mobile-close-btn"
@@ -2554,7 +2540,7 @@ function App() {
               <div className="sidebar-menu-header">Monitoring</div>
 
               {/* Menu Dashboard */}
-              <div 
+              <div
                 className={`sidebar-menu-item ${currentAppView === 'monitoring' ? 'active' : ''}`}
                 onClick={() => {
                   setCurrentAppView('monitoring');
@@ -2568,7 +2554,7 @@ function App() {
               </div>
 
               {/* Menu Sessions */}
-              <div 
+              <div
                 className={`sidebar-menu-item ${currentAppView === 'sessions' ? 'active' : ''}`}
                 onClick={() => {
                   setCurrentAppView('sessions');
@@ -2583,7 +2569,7 @@ function App() {
               </div>
 
               {/* Menu Instruments */}
-              <div 
+              <div
                 className={`sidebar-menu-item ${currentAppView === 'instruments' ? 'active' : ''}`}
                 onClick={() => {
                   setCurrentAppView('instruments');
@@ -2601,7 +2587,7 @@ function App() {
               <div className="sidebar-menu-header">Management</div>
 
               {/* Menu Customer Database */}
-              <div 
+              <div
                 className={`sidebar-menu-item ${currentAppView === 'customers' ? 'active' : ''}`}
                 onClick={() => {
                   setCurrentAppView('customers');
@@ -2616,7 +2602,7 @@ function App() {
               </div>
 
               {/* Menu Customer Feedbacks */}
-              <div 
+              <div
                 className={`sidebar-menu-item ${currentAppView === 'feedbacks' ? 'active' : ''}`}
                 onClick={() => {
                   setCurrentAppView('feedbacks');
@@ -2631,7 +2617,7 @@ function App() {
               </div>
 
               {/* Menu System Settings */}
-              <div 
+              <div
                 className={`sidebar-menu-item ${currentAppView === 'settings' ? 'active' : ''}`}
                 onClick={() => {
                   setCurrentAppView('settings');
@@ -2700,7 +2686,7 @@ function App() {
               ประเมินความพึงพอใจ
             </button>
           )}
-          <button 
+          <button
             className="sidebar-logout-btn"
             onClick={() => {
               if (userRole === 'customer') {
@@ -2929,7 +2915,7 @@ function App() {
               {machines.map(m => {
                 const machineJobs = jobs.filter(j => j.machineId === m.id);
                 const isActive = m.id === currentMachineId;
-                
+
                 return (
                   <div key={m.id} className="glass-panel" style={{ padding: '1.5rem', border: isActive ? '1px solid rgba(0, 240, 255, 0.4)' : '1px solid var(--border-color)', boxShadow: isActive ? '0 0 15px rgba(0, 240, 255, 0.15)' : 'none', position: 'relative' }}>
                     <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🖥️</div>
@@ -2937,14 +2923,14 @@ function App() {
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                       มีรันบันทึกข้อมูลทั้งหมด: <strong>{machineJobs.length} รอบ</strong>
                     </p>
-                    
+
                     <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                       <button
                         className="replay-close-btn"
-                        style={{ 
-                          background: 'rgba(0, 240, 255, 0.1)', 
-                          borderColor: 'rgba(0, 240, 255, 0.2)', 
-                          color: '#00f0ff', 
+                        style={{
+                          background: 'rgba(0, 240, 255, 0.1)',
+                          borderColor: 'rgba(0, 240, 255, 0.2)',
+                          color: '#00f0ff',
                           padding: '6px 12px',
                           fontSize: '0.8rem',
                           margin: 0
@@ -3051,14 +3037,14 @@ function App() {
 
                 {/* Tab Selector */}
                 <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(15, 23, 42, 0.3)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                  <button 
+                  <button
                     className={`nav-tab ${combinedActiveTab === 'list' ? 'active' : ''}`}
                     onClick={() => setCombinedActiveTab('list')}
                     style={{ padding: '6px 16px', fontSize: '0.85rem' }}
                   >
                     ตารางงานทั้งหมด ({jobs.length})
                   </button>
-                  <button 
+                  <button
                     className={`nav-tab ${combinedActiveTab === 'compare' ? 'active' : ''}`}
                     onClick={() => setCombinedActiveTab('compare')}
                     style={{ padding: '6px 16px', fontSize: '0.85rem' }}
@@ -3074,22 +3060,22 @@ function App() {
               <div className="glass-panel" style={{ padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>รายการรอบบันทึกทั้งหมด</h3>
-                  
+
                   {/* Search Box */}
                   <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-                    <input 
-                      type="text" 
-                      placeholder="ค้นหาเครื่องมือ หรือชื่อรอบบันทึก..." 
+                    <input
+                      type="text"
+                      placeholder="ค้นหาเครื่องมือ หรือชื่อรอบบันทึก..."
                       value={combinedSearchQuery}
                       onChange={(e) => setCombinedSearchQuery(e.target.value)}
-                      style={{ 
-                        width: '100%', 
-                        padding: '8px 12px 8px 36px', 
-                        borderRadius: '8px', 
-                        border: '1px solid var(--border-color)', 
-                        background: 'rgba(15, 23, 42, 0.5)', 
-                        color: 'white', 
-                        fontSize: '0.9rem' 
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px 8px 36px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        background: 'rgba(15, 23, 42, 0.5)',
+                        color: 'white',
+                        fontSize: '0.9rem'
                       }}
                     />
                     <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>🔍</span>
@@ -3141,7 +3127,7 @@ function App() {
                               <td><code>{job.id}</code></td>
                               <td>
                                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
-                                  <button 
+                                  <button
                                     className="replay-close-btn"
                                     style={{ background: 'rgba(0, 240, 255, 0.1)', borderColor: 'rgba(0, 240, 255, 0.2)', color: '#00f0ff', padding: '6px 12px' }}
                                     onClick={() => {
@@ -3154,7 +3140,7 @@ function App() {
                                   >
                                     เปิดบอร์ดข้อมูล
                                   </button>
-                                  <button 
+                                  <button
                                     className="export-btn"
                                     onClick={() => exportToExcel(job)}
                                     disabled={!job.data || job.data.length === 0}
@@ -3163,7 +3149,7 @@ function App() {
                                   >
                                     <Download size={14} style={{ marginRight: '4px' }} /> Excel
                                   </button>
-                                  <button 
+                                  <button
                                     className="export-btn"
                                     onClick={() => exportToCSV(job)}
                                     disabled={!job.data || job.data.length === 0}
@@ -3172,8 +3158,8 @@ function App() {
                                   >
                                     <Download size={14} style={{ marginRight: '4px' }} /> CSV
                                   </button>
-                                  <button 
-                                    className="delete-row-btn" 
+                                  <button
+                                    className="delete-row-btn"
                                     onClick={(e) => deleteJob(job.id, e)}
                                     title="Delete Session"
                                     style={{ margin: 0 }}
@@ -3194,12 +3180,12 @@ function App() {
               /* TAB 2: MULTI-SESSION COMPARE CHART */
               <div style={{ display: 'flex', gap: '1.5rem', flexDirection: 'column' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-                  
+
                   {/* Select Sessions Panel */}
                   <div className="glass-panel" style={{ padding: '1.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>1. เลือกรอบการรันเพื่อเปรียบเทียบ</h3>
-                      
+
                       {/* Select Parameter Multi-select Pills */}
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', paddingTop: '5px' }}>ตัวแปรที่วิเคราะห์:</span>
@@ -3246,21 +3232,21 @@ function App() {
                         const machine = machines.find(m => m.id === job.machineId);
                         const isChecked = selectedCompareJobIds.includes(job.id);
                         return (
-                          <label 
-                            key={job.id} 
-                            style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '0.75rem', 
-                              padding: '8px 12px', 
-                              borderRadius: '6px', 
-                              background: isChecked ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0.02)', 
-                              border: isChecked ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid var(--border-color)', 
+                          <label
+                            key={job.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              background: isChecked ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0.02)',
+                              border: isChecked ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid var(--border-color)',
                               cursor: 'pointer',
                               fontSize: '0.85rem'
                             }}
                           >
-                            <input 
+                            <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => {
@@ -3284,37 +3270,37 @@ function App() {
 
                   {/* Chart Display Panel */}
                   <div ref={compareChartRef} className="glass-panel" style={{ padding: '1.5rem', minHeight: '500px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                       <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>2. กราฟเปรียบเทียบแนวโน้ม (เทียบชั่วโมงเลี้ยงเชื้อ Culture Hour)</h3>
-                       {selectedCompareJobIds.length > 0 && (
-                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                           {/* CSV button */}
-                           <button onClick={downloadCompareCSV} title="ดาวน์โหลดข้อมูลเป็น CSV"
-                             style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 12px', borderRadius:'8px', border:'1px solid rgba(34,197,94,0.4)', background:'rgba(34,197,94,0.1)', color:'#4ade80', fontSize:'0.8rem', fontWeight:600, cursor:'pointer', transition:'all 0.18s' }}
-                             onMouseEnter={e=>{e.currentTarget.style.background='rgba(34,197,94,0.25)'}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(34,197,94,0.1)'}}
-                           >
-                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-             CSV
-                           </button>
-                           {/* PNG button */}
-                           <button onClick={downloadChartImage} title="บันทึกกราฟเป็นรูปภาพ PNG"
-                             style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 12px', borderRadius:'8px', border:'1px solid rgba(139,92,246,0.4)', background:'rgba(139,92,246,0.1)', color:'#a78bfa', fontSize:'0.8rem', fontWeight:600, cursor:'pointer', transition:'all 0.18s' }}
-                             onMouseEnter={e=>{e.currentTarget.style.background='rgba(139,92,246,0.25)'}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(139,92,246,0.1)'}}
-                           >
-                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-             PNG
-                           </button>
-                           {/* PDF button */}
-                           <button onClick={downloadChartPDF} title="บันทึกกราฟเป็น PDF"
-                             style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 12px', borderRadius:'8px', border:'1px solid rgba(239,68,68,0.4)', background:'rgba(239,68,68,0.1)', color:'#f87171', fontSize:'0.8rem', fontWeight:600, cursor:'pointer', transition:'all 0.18s' }}
-                             onMouseEnter={e=>{e.currentTarget.style.background='rgba(239,68,68,0.25)'}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(239,68,68,0.1)'}}
-                           >
-                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-             PDF
-                           </button>
-                         </div>
-                       )}
-                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>2. กราฟเปรียบเทียบแนวโน้ม (เทียบชั่วโมงเลี้ยงเชื้อ Culture Hour)</h3>
+                      {selectedCompareJobIds.length > 0 && (
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {/* CSV button */}
+                          <button onClick={downloadCompareCSV} title="ดาวน์โหลดข้อมูลเป็น CSV"
+                            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(34,197,94,0.4)', background: 'rgba(34,197,94,0.1)', color: '#4ade80', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.18s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(34,197,94,0.25)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(34,197,94,0.1)' }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            CSV
+                          </button>
+                          {/* PNG button */}
+                          <button onClick={downloadChartImage} title="บันทึกกราฟเป็นรูปภาพ PNG"
+                            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(139,92,246,0.4)', background: 'rgba(139,92,246,0.1)', color: '#a78bfa', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.18s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.25)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.1)' }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                            PNG
+                          </button>
+                          {/* PDF button */}
+                          <button onClick={downloadChartPDF} title="บันทึกกราฟเป็น PDF"
+                            style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.18s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.25)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                            PDF
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {selectedCompareJobIds.length === 0 ? (
                       <div style={{ display: 'flex', height: '80%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', gap: '0.5rem' }}>
                         <span style={{ fontSize: '2rem' }}>📊</span>
@@ -3368,9 +3354,9 @@ function App() {
                           return Object.values(roundedPoints).sort((a, b) => a.cultureHour - b.cultureHour);
                         })()}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} label={{ value: 'ชั่วโมงการเลี้ยงเชื้อ (Culture Hour)', position: 'insideBottomRight', offset: -10, fill: 'var(--text-secondary)', fontSize: 12 }} />
-                          <YAxis stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                          <Tooltip 
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} label={{ value: 'ชั่วโมงการเลี้ยงเชื้อ (Culture Hour)', position: 'insideBottomRight', offset: -10, fill: 'var(--text-secondary)', fontSize: 12 }} />
+                          <YAxis stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <Tooltip
                             contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                             labelFormatter={(val) => `ชั่วโมงเลี้ยงเชื้อ: ${val} ชม.`}
                           />
@@ -3440,7 +3426,7 @@ function App() {
               <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Settings size={20} color="var(--accent-blue)" /> ตั้งค่ารหัสผ่านผู้ดูแลระบบ (Change Admin Password)
               </h3>
-              
+
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 const currentPassword = e.target.currentPassword.value;
@@ -3475,7 +3461,7 @@ function App() {
                   alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อเปลี่ยนรหัสผ่านได้');
                 }
               }} className="data-form" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                
+
                 <div className="form-group" style={{ width: '100%' }}>
                   <label>รหัสผ่านปัจจุบัน (Current Password)</label>
                   <input
@@ -3525,10 +3511,10 @@ function App() {
 
               // Section averages
               const sectionDefs = [
-                { name: 'ด้านกระบวนการให้บริการ', keys: ['q1','q2','q3'] },
-                { name: 'ด้านเจ้าหน้าที่ผู้ให้บริการ', keys: ['q4','q5','q6'] },
-                { name: 'ด้านการประชาสัมพันธ์', keys: ['q7','q8'] },
-                { name: 'ด้านสถานที่และสิ่งอำนวยความสะดวก', keys: ['q9','q10'] },
+                { name: 'ด้านกระบวนการให้บริการ', keys: ['q1', 'q2', 'q3'] },
+                { name: 'ด้านเจ้าหน้าที่ผู้ให้บริการ', keys: ['q4', 'q5', 'q6'] },
+                { name: 'ด้านการประชาสัมพันธ์', keys: ['q7', 'q8'] },
+                { name: 'ด้านสถานที่และสิ่งอำนวยความสะดวก', keys: ['q9', 'q10'] },
                 { name: 'ด้านคุณภาพการให้บริการ', keys: ['q11'] },
               ];
 
@@ -3539,18 +3525,18 @@ function App() {
                     sd.keys.forEach(k => { if (f.scores[k]) allVals.push(Number(f.scores[k])); });
                   }
                 });
-                const avg = allVals.length > 0 ? (allVals.reduce((a,b)=>a+b,0)/allVals.length) : null;
+                const avg = allVals.length > 0 ? (allVals.reduce((a, b) => a + b, 0) / allVals.length) : null;
                 return { name: sd.name, avg };
               });
 
               // Channel counts
               const channelCounts = {};
-              feedbacks.forEach(f => { (f.channels||[]).forEach(ch => { channelCounts[ch] = (channelCounts[ch]||0)+1; }); });
+              feedbacks.forEach(f => { (f.channels || []).forEach(ch => { channelCounts[ch] = (channelCounts[ch] || 0) + 1; }); });
               const maxChCount = Math.max(1, ...Object.values(channelCounts));
 
               // Tool counts
               const toolCounts = {};
-              feedbacks.forEach(f => { (f.tools||[]).forEach(t => { toolCounts[t] = (toolCounts[t]||0)+1; }); });
+              feedbacks.forEach(f => { (f.tools || []).forEach(t => { toolCounts[t] = (toolCounts[t] || 0) + 1; }); });
               const maxToolCount = Math.max(1, ...Object.values(toolCounts));
 
               const scoreColor = (v) => {
@@ -3591,7 +3577,7 @@ function App() {
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem' }}>
                           <span style={{ flex: 1, color: '#d1d5db', fontSize: '0.78rem' }}>{s.name}</span>
                           <div style={{ width: '120px', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${s.avg ? (s.avg/5)*100 : 0}%`, height: '100%', background: scoreColor(s.avg), borderRadius: '3px', transition: 'width 0.4s' }} />
+                            <div style={{ width: `${s.avg ? (s.avg / 5) * 100 : 0}%`, height: '100%', background: scoreColor(s.avg), borderRadius: '3px', transition: 'width 0.4s' }} />
                           </div>
                           <span style={{ width: '36px', textAlign: 'right', fontWeight: 700, color: scoreColor(s.avg) }}>
                             {s.avg ? s.avg.toFixed(2) : '—'}
@@ -3609,11 +3595,11 @@ function App() {
                         <div className="stat-card" style={{ padding: '1.25rem' }}>
                           <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-blue)', marginBottom: '10px' }}>📡 ช่องทางที่รู้จัก FTC</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {Object.entries(channelCounts).sort((a,b)=>b[1]-a[1]).map(([ch, cnt]) => (
+                            {Object.entries(channelCounts).sort((a, b) => b[1] - a[1]).map(([ch, cnt]) => (
                               <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
                                 <span style={{ flex: 1, color: '#d1d5db' }}>{ch}</span>
                                 <div style={{ width: '80px', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${(cnt/maxChCount)*100}%`, height: '100%', background: 'var(--accent-blue)', borderRadius: '3px' }} />
+                                  <div style={{ width: `${(cnt / maxChCount) * 100}%`, height: '100%', background: 'var(--accent-blue)', borderRadius: '3px' }} />
                                 </div>
                                 <span style={{ width: '24px', textAlign: 'right', color: 'var(--accent-blue)', fontWeight: 700 }}>{cnt}</span>
                               </div>
@@ -3626,11 +3612,11 @@ function App() {
                         <div className="stat-card" style={{ padding: '1.25rem' }}>
                           <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-green)', marginBottom: '10px' }}>🔬 เครื่องมือที่ใช้บริการ</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {Object.entries(toolCounts).sort((a,b)=>b[1]-a[1]).map(([t, cnt]) => (
+                            {Object.entries(toolCounts).sort((a, b) => b[1] - a[1]).map(([t, cnt]) => (
                               <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
                                 <span style={{ flex: 1, color: '#d1d5db' }}>{t}</span>
                                 <div style={{ width: '80px', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${(cnt/maxToolCount)*100}%`, height: '100%', background: 'var(--accent-green)', borderRadius: '3px' }} />
+                                  <div style={{ width: `${(cnt / maxToolCount) * 100}%`, height: '100%', background: 'var(--accent-green)', borderRadius: '3px' }} />
                                 </div>
                                 <span style={{ width: '24px', textAlign: 'right', color: 'var(--accent-green)', fontWeight: 700 }}>{cnt}</span>
                               </div>
@@ -3694,12 +3680,12 @@ function App() {
                       {fb.scores && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '4px' }}>
                           {Object.entries(fb.scores).map(([k, v]) => {
-                            const qIdx = parseInt(k.replace('q','')) - 1;
+                            const qIdx = parseInt(k.replace('q', '')) - 1;
                             const qObj = [
-                              'ขั้นตอนการให้บริการ','ช่องทางการติดต่อ','ระยะเวลาให้บริการ',
-                              'บุคลิกภาพเจ้าหน้าที่','คำแนะนำของเจ้าหน้าที่','ความรู้เจ้าหน้าที่',
-                              'สื่อประชาสัมพันธ์','ช่องทาง PR','สถานที่ให้บริการ',
-                              'สิ่งอำนวยความสะดวก','คุณภาพบริการ'
+                              'ขั้นตอนการให้บริการ', 'ช่องทางการติดต่อ', 'ระยะเวลาให้บริการ',
+                              'บุคลิกภาพเจ้าหน้าที่', 'คำแนะนำของเจ้าหน้าที่', 'ความรู้เจ้าหน้าที่',
+                              'สื่อประชาสัมพันธ์', 'ช่องทาง PR', 'สถานที่ให้บริการ',
+                              'สิ่งอำนวยความสะดวก', 'คุณภาพบริการ'
                             ];
                             const label = qObj[qIdx] || k;
                             const score = Number(v);
@@ -3717,10 +3703,10 @@ function App() {
                       {/* Channels & Tools used */}
                       {((fb.channels && fb.channels.length > 0) || (fb.tools && fb.tools.length > 0)) && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                          {(fb.channels||[]).map(ch => (
+                          {(fb.channels || []).map(ch => (
                             <span key={ch} style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd' }}>📡 {ch}</span>
                           ))}
-                          {(fb.tools||[]).map(t => (
+                          {(fb.tools || []).map(t => (
                             <span key={t} style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', color: '#86efac' }}>🔬 {t}</span>
                           ))}
                         </div>
@@ -3760,28 +3746,28 @@ function App() {
                     </span>
                   </h2>
                 </div>
-                
+
                 {currentJob && (
                   <div className="nav-tabs" style={{ margin: 0 }}>
-                    <button 
+                    <button
                       className={`nav-tab ${activeTab === 'diagram' ? 'active' : ''}`}
                       onClick={() => setActiveTab('diagram')}
                     >
                       <Cpu size={16} /> Diagram
                     </button>
-                    <button 
+                    <button
                       className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
                       onClick={() => setActiveTab('dashboard')}
                     >
                       <LayoutDashboard size={16} /> Dashboard
                     </button>
-                    <button 
+                    <button
                       className={`nav-tab ${activeTab === 'combined' ? 'active' : ''}`}
                       onClick={() => setActiveTab('combined')}
                     >
                       <ChartIcon size={16} /> Graph
                     </button>
-                    <button 
+                    <button
                       className={`nav-tab ${activeTab === 'table' ? 'active' : ''}`}
                       onClick={() => setActiveTab('table')}
                     >
@@ -3847,12 +3833,12 @@ function App() {
                   <Download size={18} style={{ marginRight: '8px' }} /> Export CSV
                 </button>
                 {currentJob && userRole === 'admin' && (
-                  <button 
-                    className="export-btn" 
+                  <button
+                    className="export-btn"
                     onClick={() => {
                       setShareModalJobId(currentJob.id);
                       setShowCustomerShareModal(true);
-                    }} 
+                    }}
                     style={{ margin: 0, background: 'linear-gradient(135deg, var(--accent-green), #059669)', border: 'none', color: '#fff' }}
                     title="ตั้งค่าการแชร์และคัดลอกลิงก์ให้ลูกค้า"
                   >
@@ -3994,18 +3980,18 @@ function App() {
                     {/* Date and Time manual inputs */}
                     <div className="form-group" style={{ minWidth: '180px' }}>
                       <label>📅 DATE (วันที่บันทึก)</label>
-                      <input 
-                        type="date" 
-                        name="date" 
-                        value={formData.date} 
+                      <input
+                        type="date"
+                        name="date"
+                        value={formData.date}
                         onChange={handleInputChange}
                         disabled={currentJob?.status === 'finished'}
-                        style={{ 
-                          width: '100%', 
-                          padding: '10px 14px', 
-                          borderRadius: '8px', 
-                          border: '1px solid var(--border-color)', 
-                          background: 'rgba(15, 23, 42, 0.5)', 
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(15, 23, 42, 0.5)',
                           color: 'white',
                           fontFamily: 'inherit',
                           fontSize: '0.95rem'
@@ -4014,18 +4000,18 @@ function App() {
                     </div>
                     <div className="form-group" style={{ minWidth: '180px' }}>
                       <label>⏰ TIME (เวลาที่บันทึก)</label>
-                      <input 
-                        type="time" 
-                        name="time" 
-                        value={formData.time} 
+                      <input
+                        type="time"
+                        name="time"
+                        value={formData.time}
                         onChange={handleInputChange}
                         disabled={currentJob?.status === 'finished'}
-                        style={{ 
-                          width: '100%', 
-                          padding: '10px 14px', 
-                          borderRadius: '8px', 
-                          border: '1px solid var(--border-color)', 
-                          background: 'rgba(15, 23, 42, 0.5)', 
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(15, 23, 42, 0.5)',
                           color: 'white',
                           fontFamily: 'inherit',
                           fontSize: '0.95rem'
@@ -4036,24 +4022,24 @@ function App() {
                     {/* Remarks/Notes full-width input */}
                     <div className="form-group" style={{ flex: '1 1 100%' }}>
                       <label>REMARKS / NOTES (บันทึกข้อความ)</label>
-                      <input 
-                        type="text" 
-                        name="remark" 
-                        placeholder="ระบุหมายเหตุหรือข้อความบันทึกที่นี่ (เช่น ปรับค่าอัตราไหล, ตรวจสภาพโพรบ)..." 
-                        value={formData.remark} 
+                      <input
+                        type="text"
+                        name="remark"
+                        placeholder="ระบุหมายเหตุหรือข้อความบันทึกที่นี่ (เช่น ปรับค่าอัตราไหล, ตรวจสภาพโพรบ)..."
+                        value={formData.remark}
                         onChange={handleInputChange}
                         disabled={currentJob?.status === 'finished'}
-                        style={{ 
-                          width: '100%', 
-                          padding: '10px 14px', 
-                          borderRadius: '8px', 
-                          border: '1px solid var(--border-color)', 
-                          background: 'rgba(15, 23, 42, 0.5)', 
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(15, 23, 42, 0.5)',
                           color: 'white',
                           textAlign: 'left',
                           fontFamily: 'inherit',
                           fontSize: '0.95rem'
-                        }} 
+                        }}
                       />
                     </div>
 
@@ -4070,22 +4056,23 @@ function App() {
               <div className="glass-panel empty-state">
                 <h2>Select or create a session to start.</h2>
               </div>
-                ) : currentJobData.length === 0 ? (
+            ) : currentJobData.length === 0 ? (
               <div className="glass-panel empty-state">
                 <FolderOpen size={48} opacity={0.5} />
                 <h2>No data recorded yet</h2>
                 <p>Use the manual entry form above to add your first record.</p>
               </div>
             ) : (
-               activeTab === 'diagram' ? (
-                <BSTRDiagram 
-                  dataPoint={lastDataPointForDisplay} 
-                  chartData={chartData} 
-                  isReplaying={isReplay} 
-                  isReplayingPlaying={isReplayPlaying} 
+              activeTab === 'diagram' ? (
+                <BSTRDiagram
+                  dataPoint={lastDataPointForDisplay}
+                  chartData={chartData}
+                  isReplaying={isReplay}
+                  isReplayingPlaying={isReplayPlaying}
                   jobStatus={currentJob?.status || 'running'}
                   onToggleStatus={() => handleToggleJobStatus(currentJob?.id, currentJob?.status || 'running')}
                   userRole={userRole}
+                  isViewingHistory={isViewingHistory}
                 />
               ) : activeTab === 'dashboard' ? (
                 <>
@@ -4162,8 +4149,8 @@ function App() {
                       <ResponsiveContainer width="100%" height="85%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(2) : val} />
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(2) : val} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line type="monotone" dataKey="temp_read" name="TEMP PV (Read)" stroke="var(--accent-red)" strokeWidth={3} dot={true} activeDot={{ r: 8 }} />
@@ -4179,8 +4166,8 @@ function App() {
                       <ResponsiveContainer width="100%" height="85%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line type="monotone" dataKey="ph_read" name="pH PV (Read)" stroke="var(--accent-blue)" strokeWidth={3} dot={true} activeDot={{ r: 8 }} />
@@ -4196,9 +4183,9 @@ function App() {
                       <ResponsiveContainer width="100%" height="85%">
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                          <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                          <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} />
+                          <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line yAxisId="left" type="monotone" dataKey="do_read" name="DO PV (%)" stroke="var(--accent-green)" strokeWidth={3} dot={true} />
@@ -4210,18 +4197,18 @@ function App() {
                     </div>
                   </div>
                 </>
-                ) : activeTab === 'combined' ? (
+              ) : activeTab === 'combined' ? (
                 <div className="glass-panel" style={{ height: '650px', padding: '2rem' }}>
                   <div className="chart-header" style={{ marginBottom: '1.5rem', flexDirection: 'column', alignItems: 'flex-start', gap: '1rem' }}>
                     <h2 className="chart-title">Combined Bioprocess Overview</h2>
-                    
+
                     {/* Toggle Selector Buttons */}
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', width: '100%', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.3)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                      <button 
+                      <button
                         className="toggle-btn"
-                        style={{ 
-                          borderColor: 'var(--accent-red)', 
-                          color: visibleParameters.temp ? 'white' : 'var(--accent-red)', 
+                        style={{
+                          borderColor: 'var(--accent-red)',
+                          color: visibleParameters.temp ? 'white' : 'var(--accent-red)',
                           background: visibleParameters.temp ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
                           fontWeight: 600,
                           fontSize: '0.85rem',
@@ -4231,11 +4218,11 @@ function App() {
                       >
                         TEMP ({visibleParameters.temp ? 'ON' : 'OFF'})
                       </button>
-                      <button 
+                      <button
                         className="toggle-btn"
-                        style={{ 
-                          borderColor: 'var(--accent-blue)', 
-                          color: visibleParameters.ph ? 'white' : 'var(--accent-blue)', 
+                        style={{
+                          borderColor: 'var(--accent-blue)',
+                          color: visibleParameters.ph ? 'white' : 'var(--accent-blue)',
                           background: visibleParameters.ph ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
                           fontWeight: 600,
                           fontSize: '0.85rem',
@@ -4245,11 +4232,11 @@ function App() {
                       >
                         pH ({visibleParameters.ph ? 'ON' : 'OFF'})
                       </button>
-                      <button 
+                      <button
                         className="toggle-btn"
-                        style={{ 
-                          borderColor: 'var(--accent-green)', 
-                          color: visibleParameters.do ? 'white' : 'var(--accent-green)', 
+                        style={{
+                          borderColor: 'var(--accent-green)',
+                          color: visibleParameters.do ? 'white' : 'var(--accent-green)',
                           background: visibleParameters.do ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
                           fontWeight: 600,
                           fontSize: '0.85rem',
@@ -4259,11 +4246,11 @@ function App() {
                       >
                         DO ({visibleParameters.do ? 'ON' : 'OFF'})
                       </button>
-                      <button 
+                      <button
                         className="toggle-btn"
-                        style={{ 
-                          borderColor: 'var(--accent-yellow)', 
-                          color: visibleParameters.agit ? 'white' : 'var(--accent-yellow)', 
+                        style={{
+                          borderColor: 'var(--accent-yellow)',
+                          color: visibleParameters.agit ? 'white' : 'var(--accent-yellow)',
                           background: visibleParameters.agit ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
                           fontWeight: 600,
                           fontSize: '0.85rem',
@@ -4273,11 +4260,11 @@ function App() {
                       >
                         AGIT ({visibleParameters.agit ? 'ON' : 'OFF'})
                       </button>
-                      <button 
+                      <button
                         className="toggle-btn"
-                        style={{ 
-                          borderColor: 'var(--accent-purple)', 
-                          color: visibleParameters.air ? 'white' : 'var(--accent-purple)', 
+                        style={{
+                          borderColor: 'var(--accent-purple)',
+                          color: visibleParameters.air ? 'white' : 'var(--accent-purple)',
                           background: visibleParameters.air ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
                           fontWeight: 600,
                           fontSize: '0.85rem',
@@ -4292,9 +4279,9 @@ function App() {
                   <ResponsiveContainer width="100%" height="80%">
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{fontSize: 12}} />
-                      <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{fontSize: 12}} label={{ value: 'TEMP / pH / DO / AIR', angle: -90, position: 'insideLeft', fill: 'var(--text-secondary)' }} />
-                      <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{fontSize: 12}} label={{ value: 'AGIT (RPM)', angle: 90, position: 'insideRight', fill: 'var(--text-secondary)' }} />
+                      <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} label={{ value: 'TEMP / pH / DO / AIR', angle: -90, position: 'insideLeft', fill: 'var(--text-secondary)' }} />
+                      <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} label={{ value: 'AGIT (RPM)', angle: 90, position: 'insideRight', fill: 'var(--text-secondary)' }} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
                       {visibleParameters.temp && <Line yAxisId="left" type="monotone" dataKey="temp_read" name="TEMP PV (°C)" stroke="var(--accent-red)" strokeWidth={3} dot={true} />}
@@ -4315,8 +4302,8 @@ function App() {
                   <div className="table-header-controls">
                     <h2 className="chart-title">Recorded Data</h2>
                     {userRole === 'admin' && (
-                      <button 
-                        className="delete-job-btn" 
+                      <button
+                        className="delete-job-btn"
                         onClick={clearAllData}
                         style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', padding: '8px 16px', borderRadius: '8px' }}
                       >
@@ -4372,18 +4359,18 @@ function App() {
                           editingRowIndex === row.originalIndex ? (
                             <tr key={index} style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="date" 
-                                  value={editingRowData.date} 
-                                  onChange={(e) => handleEditChange('date', e.target.value)} 
+                                <input
+                                  type="date"
+                                  value={editingRowData.date}
+                                  onChange={(e) => handleEditChange('date', e.target.value)}
                                   style={{ padding: '6px 4px', borderRadius: '4px', border: '1px solid var(--accent-blue)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '115px' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="time" 
-                                  value={editingRowData.time} 
-                                  onChange={(e) => handleEditChange('time', e.target.value)} 
+                                <input
+                                  type="time"
+                                  value={editingRowData.time}
+                                  onChange={(e) => handleEditChange('time', e.target.value)}
                                   style={{ padding: '6px 4px', borderRadius: '4px', border: '1px solid var(--accent-blue)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '85px' }}
                                 />
                               </td>
@@ -4391,170 +4378,170 @@ function App() {
                                 {getEditingRowCultureHour()} ชม.
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
-                                  value={editingRowData.temp_set} 
-                                  onChange={(e) => handleEditChange('temp_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingRowData.temp_set}
+                                  onChange={(e) => handleEditChange('temp_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
-                                  value={editingRowData.temp_read} 
-                                  onChange={(e) => handleEditChange('temp_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingRowData.temp_read}
+                                  onChange={(e) => handleEditChange('temp_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-red)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
-                                  value={editingRowData.ph_set} 
-                                  onChange={(e) => handleEditChange('ph_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingRowData.ph_set}
+                                  onChange={(e) => handleEditChange('ph_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.01" 
-                                  value={editingRowData.ph_read} 
-                                  onChange={(e) => handleEditChange('ph_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingRowData.ph_read}
+                                  onChange={(e) => handleEditChange('ph_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-blue)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="1" 
-                                  value={editingRowData.do_set} 
-                                  onChange={(e) => handleEditChange('do_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={editingRowData.do_set}
+                                  onChange={(e) => handleEditChange('do_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '40px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="1" 
-                                  value={editingRowData.do_read} 
-                                  onChange={(e) => handleEditChange('do_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={editingRowData.do_read}
+                                  onChange={(e) => handleEditChange('do_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '40px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="1" 
-                                  value={editingRowData.agit_set} 
-                                  onChange={(e) => handleEditChange('agit_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={editingRowData.agit_set}
+                                  onChange={(e) => handleEditChange('agit_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="1" 
-                                  value={editingRowData.agit_read} 
-                                  onChange={(e) => handleEditChange('agit_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={editingRowData.agit_read}
+                                  onChange={(e) => handleEditChange('agit_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-yellow)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '50px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.1" 
-                                  value={editingRowData.air_set} 
-                                  onChange={(e) => handleEditChange('air_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editingRowData.air_set}
+                                  onChange={(e) => handleEditChange('air_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.1" 
-                                  value={editingRowData.air_read} 
-                                  onChange={(e) => handleEditChange('air_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editingRowData.air_read}
+                                  onChange={(e) => handleEditChange('air_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-purple)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.1" 
-                                  value={editingRowData.level_set} 
-                                  onChange={(e) => handleEditChange('level_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editingRowData.level_set}
+                                  onChange={(e) => handleEditChange('level_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.1" 
-                                  value={editingRowData.level_read} 
-                                  onChange={(e) => handleEditChange('level_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editingRowData.level_read}
+                                  onChange={(e) => handleEditChange('level_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.1" 
-                                  value={editingRowData.air_out_set} 
-                                  onChange={(e) => handleEditChange('air_out_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editingRowData.air_out_set}
+                                  onChange={(e) => handleEditChange('air_out_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="0.1" 
-                                  value={editingRowData.air_out_read} 
-                                  onChange={(e) => handleEditChange('air_out_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={editingRowData.air_out_read}
+                                  onChange={(e) => handleEditChange('air_out_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-purple)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="1" 
-                                  value={editingRowData.heat_set} 
-                                  onChange={(e) => handleEditChange('heat_set', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={editingRowData.heat_set}
+                                  onChange={(e) => handleEditChange('heat_set', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
                                 />
                               </td>
                               <td style={{ textAlign: 'center', padding: '6px' }}>
-                                <input 
-                                  type="number" 
-                                  step="1" 
-                                  value={editingRowData.heat_read} 
-                                  onChange={(e) => handleEditChange('heat_read', parseFloat(e.target.value) || 0)} 
+                                <input
+                                  type="number"
+                                  step="1"
+                                  value={editingRowData.heat_read}
+                                  onChange={(e) => handleEditChange('heat_read', parseFloat(e.target.value) || 0)}
                                   style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-yellow)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
                                 />
                               </td>
                               <td style={{ textAlign: 'left', padding: '6px' }}>
-                                <input 
-                                  type="text" 
-                                  value={editingRowData.remark} 
-                                  onChange={(e) => handleEditChange('remark', e.target.value)} 
+                                <input
+                                  type="text"
+                                  value={editingRowData.remark}
+                                  onChange={(e) => handleEditChange('remark', e.target.value)}
                                   style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'white', fontSize: '0.85rem', width: '100%', minWidth: '100px' }}
                                 />
                               </td>
                               {userRole === 'admin' && (
                                 <td style={{ textAlign: 'center', padding: '6px' }}>
                                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
-                                    <button 
-                                      className="save-row-btn" 
+                                    <button
+                                      className="save-row-btn"
                                       onClick={saveEditRow}
                                       title="Save changes"
                                       style={{ background: 'transparent', border: 'none', color: 'var(--accent-green)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                                     >
                                       <Check size={16} />
                                     </button>
-                                    <button 
-                                      className="cancel-row-btn" 
+                                    <button
+                                      className="cancel-row-btn"
                                       onClick={cancelEditRow}
                                       title="Cancel editing"
                                       style={{ background: 'transparent', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -4590,8 +4577,8 @@ function App() {
                               {userRole === 'admin' && (
                                 <td style={{ textAlign: 'center' }}>
                                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
-                                    <button 
-                                      className="edit-row-btn" 
+                                    <button
+                                      className="edit-row-btn"
                                       onClick={() => startEditRow(row.originalIndex, row)}
                                       title="Edit this record"
                                       style={{ background: 'transparent', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.7 }}
@@ -4600,8 +4587,8 @@ function App() {
                                     >
                                       <Edit3 size={16} />
                                     </button>
-                                    <button 
-                                      className="delete-row-btn" 
+                                    <button
+                                      className="delete-row-btn"
                                       onClick={() => deleteDataPoint(row.originalIndex)}
                                       title="Delete this record"
                                       style={{ margin: '0' }}
@@ -4629,7 +4616,7 @@ function App() {
             <div className="replay-controls-row">
               {/* Buttons Group */}
               <div className="replay-btn-group">
-                <button 
+                <button
                   className="replay-control-btn"
                   onClick={() => {
                     setReplayIndex(1);
@@ -4639,7 +4626,7 @@ function App() {
                 >
                   <RotateCcw size={18} />
                 </button>
-                <button 
+                <button
                   className="replay-control-btn active"
                   style={{ background: isReplayPlaying ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.05)' }}
                   onClick={() => setIsReplayPlaying(!isReplayPlaying)}
@@ -4651,11 +4638,11 @@ function App() {
 
               {/* Scrubber Slider */}
               <div className="replay-slider-container">
-                <input 
-                  type="range" 
-                  min="1" 
-                  max={sortedFullData.length} 
-                  value={replayIndex} 
+                <input
+                  type="range"
+                  min="1"
+                  max={sortedFullData.length}
+                  value={replayIndex}
                   onChange={(e) => {
                     setReplayIndex(Number(e.target.value));
                     setIsReplayPlaying(false);
@@ -4670,28 +4657,28 @@ function App() {
               {/* Speed & Close Group */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <div className="replay-speed-selector">
-                  <button 
+                  <button
                     className={`replay-speed-btn ${replaySpeed === 2500 ? 'active' : ''}`}
                     onClick={() => setReplaySpeed(2500)}
                     title="Slow Speed"
                   >
                     0.5x
                   </button>
-                  <button 
+                  <button
                     className={`replay-speed-btn ${replaySpeed === 1500 ? 'active' : ''}`}
                     onClick={() => setReplaySpeed(1500)}
                     title="Normal Speed"
                   >
                     1x
                   </button>
-                  <button 
+                  <button
                     className={`replay-speed-btn ${replaySpeed === 600 ? 'active' : ''}`}
                     onClick={() => setReplaySpeed(600)}
                     title="Fast Speed"
                   >
                     2.5x
                   </button>
-                  <button 
+                  <button
                     className={`replay-speed-btn ${replaySpeed === 250 ? 'active' : ''}`}
                     onClick={() => setReplaySpeed(250)}
                     title="Hyper Speed"
@@ -4700,7 +4687,7 @@ function App() {
                   </button>
                 </div>
 
-                <button 
+                <button
                   className="replay-close-btn"
                   onClick={() => {
                     setIsReplay(false);
@@ -4720,14 +4707,14 @@ function App() {
       {showCustomerShareModal && shareModalJobId && (
         <div className="modal-backdrop" onClick={() => { setShowCustomerShareModal(false); setShareModalJobId(null); }}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-            
+
             {/* Modal Header */}
             <div className="modal-header">
               <h3>
                 <Users size={22} color="var(--accent-green)" />
                 ตั้งค่าลิงก์ลูกค้า & ความปลอดภัย (Customer Share)
               </h3>
-              <button 
+              <button
                 className="modal-close-btn"
                 onClick={() => {
                   setShowCustomerShareModal(false);
@@ -4743,24 +4730,24 @@ function App() {
             {(() => {
               const job = jobs.find(j => j.id === shareModalJobId);
               if (!job) return <div style={{ color: 'var(--accent-red)' }}>ไม่พบข้อมูลรอบบันทึก (Session Not Found)</div>;
-              
+
               const machine = machines.find(m => m.id === job.machineId);
-              
+
               // Expiry calculations
               let expiryStatusText = "ไม่มีวันหมดอายุ (Unlimited)";
               let isExpired = false;
               if (job.expiresAt) {
                 const expDate = new Date(job.expiresAt);
                 isExpired = expDate < new Date();
-                expiryStatusText = isExpired 
-                  ? `หมดอายุแล้วเมื่อ ${expDate.toLocaleString('th-TH')}` 
+                expiryStatusText = isExpired
+                  ? `หมดอายุแล้วเมื่อ ${expDate.toLocaleString('th-TH')}`
                   : `หมดอายุวันที่ ${expDate.toLocaleString('th-TH')}`;
               }
-              
+
               // Look up customer assigned to this machine
               const assignedCustomer = customers.find(c => c.machineId === job.machineId);
               const loginUrl = `${window.location.origin}/?job=${job.id}`;
-              
+
               // Email invitation body template
               const customerName = assignedCustomer ? assignedCustomer.companyName : "[ชื่อลูกค้า]";
               const expiryInfoText = job.expiresAt ? new Date(job.expiresAt).toLocaleString('th-TH') : "ไม่มีวันหมดอายุ";
@@ -4768,7 +4755,7 @@ function App() {
 
               return (
                 <div className="modal-body">
-                  
+
                   {/* Info Row */}
                   <div className="modal-info-box">
                     <div>
@@ -4785,15 +4772,15 @@ function App() {
                   <div>
                     <label className="modal-label">🔗 ลิงก์เข้าใช้งานตรงสำหรับลูกค้า (Direct Share Link)</label>
                     <div className="modal-input-row">
-                      <input 
-                        type="text" 
-                        readOnly 
-                        value={loginUrl} 
+                      <input
+                        type="text"
+                        readOnly
+                        value={loginUrl}
                         className="modal-input"
                         onClick={(e) => e.target.select()}
                       />
-                      <button 
-                        className="submit-btn" 
+                      <button
+                        className="submit-btn"
                         style={{ margin: 0, padding: '0 16px', background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)' }}
                         onClick={async () => {
                           await navigator.clipboard.writeText(loginUrl);
@@ -4845,9 +4832,9 @@ function App() {
 
                       {/* Manual Input */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
-                        <input 
-                          type="number" 
-                          placeholder="ชม. เช่น 48" 
+                        <input
+                          type="number"
+                          placeholder="ชม. เช่น 48"
                           className="modal-input"
                           style={{ width: '90px', padding: '6px 8px', textAlign: 'center', fontSize: '0.85rem' }}
                           onKeyDown={async (e) => {
@@ -4894,13 +4881,13 @@ function App() {
                         <button
                           type="button"
                           className="submit-btn"
-                          style={{ 
-                            margin: 0, 
-                            padding: '4px 8px', 
-                            fontSize: '0.75rem', 
-                            background: 'rgba(16, 185, 129, 0.1)', 
-                            border: '1px solid rgba(16, 185, 129, 0.3)', 
-                            color: 'var(--accent-green)', 
+                          style={{
+                            margin: 0,
+                            padding: '4px 8px',
+                            fontSize: '0.75rem',
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            color: 'var(--accent-green)',
                             borderRadius: '4px',
                             height: 'auto',
                             fontWeight: 600
@@ -4921,15 +4908,15 @@ function App() {
                           <div>บริษัท/ชื่อ: <strong>{assignedCustomer.companyName}</strong></div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>อีเมล: {assignedCustomer.email || 'ไม่ได้ระบุ'}</div>
                         </div>
-                        
+
                         <div className="modal-preview-box">
                           {invitationText}
                         </div>
                       </div>
                     ) : (
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.15)', textAlign: 'center', lineHeight: 1.5 }}>
-                        ⚠️ ยังไม่ได้ระบุข้อมูลลูกค้ารับผิดชอบเครื่องมือ "{machine?.name || ''}" ในฐานข้อมูล<br/>
-                        <span 
+                        ⚠️ ยังไม่ได้ระบุข้อมูลลูกค้ารับผิดชอบเครื่องมือ "{machine?.name || ''}" ในฐานข้อมูล<br />
+                        <span
                           style={{ color: 'var(--accent-blue)', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, display: 'inline-block', marginTop: '6px' }}
                           onClick={() => {
                             setShowCustomerShareModal(false);
@@ -5048,8 +5035,8 @@ function App() {
                       letterSpacing: '0.03em'
                     }}>
                       <span>หัวข้อการประเมิน</span>
-                      {[5,4,3,2,1].map(s => (
-                        <span key={s} style={{ textAlign: 'center', color: scoreColors[s] }}>{s}<br/><span style={{ fontSize: '0.6rem', fontWeight: 400 }}>{scoreLabels[s].substring(0,3)}</span></span>
+                      {[5, 4, 3, 2, 1].map(s => (
+                        <span key={s} style={{ textAlign: 'center', color: scoreColors[s] }}>{s}<br /><span style={{ fontSize: '0.6rem', fontWeight: 400 }}>{scoreLabels[s].substring(0, 3)}</span></span>
                       ))}
                     </div>
 
@@ -5087,7 +5074,7 @@ function App() {
                             <span style={{ fontSize: '0.82rem', color: '#d1d5db', lineHeight: 1.4, paddingRight: '8px' }}>
                               {SURVEY_QUESTIONS.indexOf(q) + 1}. {q.text}
                             </span>
-                            {[5,4,3,2,1].map(score => (
+                            {[5, 4, 3, 2, 1].map(score => (
                               <label key={score} style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
                                 <input
                                   type="radio"
@@ -5220,7 +5207,7 @@ function App() {
       {showAddSessionModal && (
         <div className="modal-backdrop" onClick={() => { if (!showWizardSuccess) setShowAddSessionModal(false); }}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-            
+
             {/* Modal Header */}
             <div className="modal-header">
               <h3>
@@ -5228,7 +5215,7 @@ function App() {
                 {showWizardSuccess ? 'ตั้งค่าการบันทึกข้อมูลและลูกค้าสำเร็จ' : 'ตั้งค่าเปิดงานใหม่ & จับคู่ลูกค้า (New Run Setup)'}
               </h3>
               {!showWizardSuccess && (
-                <button 
+                <button
                   className="modal-close-btn"
                   onClick={() => setShowAddSessionModal(false)}
                   title="ปิด"
@@ -5277,15 +5264,15 @@ function App() {
                     <div>
                       <label className="modal-label">🔗 ลิงก์เข้าใช้งานตรงสำหรับลูกค้า (Direct Share Link)</label>
                       <div className="modal-input-row">
-                        <input 
-                          type="text" 
-                          readOnly 
-                          value={loginUrl} 
+                        <input
+                          type="text"
+                          readOnly
+                          value={loginUrl}
                           className="modal-input"
                           onClick={(e) => e.target.select()}
                         />
-                        <button 
-                          className="submit-btn" 
+                        <button
+                          className="submit-btn"
                           style={{ margin: 0, padding: '0 16px', background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)' }}
                           onClick={async () => {
                             await navigator.clipboard.writeText(loginUrl);
@@ -5304,13 +5291,13 @@ function App() {
                         <button
                           type="button"
                           className="submit-btn"
-                          style={{ 
-                            margin: 0, 
-                            padding: '4px 8px', 
-                            fontSize: '0.75rem', 
-                            background: 'rgba(16, 185, 129, 0.1)', 
-                            border: '1px solid rgba(16, 185, 129, 0.3)', 
-                            color: 'var(--accent-green)', 
+                          style={{
+                            margin: 0,
+                            padding: '4px 8px',
+                            fontSize: '0.75rem',
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            color: 'var(--accent-green)',
                             borderRadius: '4px',
                             height: 'auto',
                             fontWeight: 600
@@ -5330,8 +5317,8 @@ function App() {
 
                     {/* Actions */}
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-                      <button 
-                        className="submit-btn" 
+                      <button
+                        className="submit-btn"
                         style={{ background: 'linear-gradient(135deg, var(--accent-green), #059669)', border: 'none', color: '#fff', padding: '10px 24px', fontSize: '0.95rem', margin: 0 }}
                         onClick={() => {
                           setCurrentMachineId(job.machineId);
@@ -5353,13 +5340,13 @@ function App() {
             ) : (
               /* Setup Form */
               <form onSubmit={submitNewJob} className="modal-body" style={{ margin: 0 }}>
-                
+
                 {/* Step 1: Run Config */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <label className="modal-label">🖥️ เครื่องมือ / อุปกรณ์ *</label>
-                    <select 
-                      value={newSessionMachineId} 
+                    <select
+                      value={newSessionMachineId}
                       onChange={(e) => setNewSessionMachineId(e.target.value)}
                       className="modal-input"
                       style={{ width: '100%', padding: '10px', height: '42px', backgroundImage: 'none' }}
@@ -5372,11 +5359,11 @@ function App() {
                   </div>
                   <div>
                     <label className="modal-label">📝 ชื่อรอบบันทึกข้อมูล *</label>
-                    <input 
-                      type="text" 
-                      value={newSessionName} 
+                    <input
+                      type="text"
+                      value={newSessionName}
                       onChange={(e) => setNewSessionName(e.target.value)}
-                      placeholder="เช่น Session 1 หรือ Batch-01" 
+                      placeholder="เช่น Session 1 หรือ Batch-01"
                       className="modal-input"
                       required
                       style={{ width: '100%', padding: '10px' }}
@@ -5387,8 +5374,8 @@ function App() {
                 {/* Step 2: Customer Assignment */}
                 <div className="modal-section">
                   <label className="modal-label">👥 ระบุลูกค้าผู้เข้าใช้งาน (Customer Assignment)</label>
-                  <select 
-                    value={newSessionCustomerId} 
+                  <select
+                    value={newSessionCustomerId}
                     onChange={(e) => {
                       setNewSessionCustomerId(e.target.value);
                       if (e.target.value !== 'ADD_NEW') {
@@ -5411,25 +5398,25 @@ function App() {
                     <div style={{ display: 'flex', gap: '1rem', background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                       <div style={{ flex: 1 }}>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>ชื่อบริษัท/ลูกค้า *</span>
-                        <input 
-                          type="text" 
-                          value={newSessionCustomerName} 
-                          onChange={(e) => setNewSessionCustomerName(e.target.value)} 
-                          placeholder="ชื่อบริษัท/ชื่อลูกค้า" 
-                          className="modal-input" 
-                          required 
-                          style={{ width: '100%', marginTop: '4px', height: '36px', padding: '6px 10px' }} 
+                        <input
+                          type="text"
+                          value={newSessionCustomerName}
+                          onChange={(e) => setNewSessionCustomerName(e.target.value)}
+                          placeholder="ชื่อบริษัท/ชื่อลูกค้า"
+                          className="modal-input"
+                          required
+                          style={{ width: '100%', marginTop: '4px', height: '36px', padding: '6px 10px' }}
                         />
                       </div>
                       <div style={{ flex: 1 }}>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>อีเมล (Email)</span>
-                        <input 
-                          type="email" 
-                          value={newSessionCustomerEmail} 
-                          onChange={(e) => setNewSessionCustomerEmail(e.target.value)} 
-                          placeholder="customer@example.com" 
-                          className="modal-input" 
-                          style={{ width: '100%', marginTop: '4px', height: '36px', padding: '6px 10px' }} 
+                        <input
+                          type="email"
+                          value={newSessionCustomerEmail}
+                          onChange={(e) => setNewSessionCustomerEmail(e.target.value)}
+                          placeholder="customer@example.com"
+                          className="modal-input"
+                          style={{ width: '100%', marginTop: '4px', height: '36px', padding: '6px 10px' }}
                         />
                       </div>
                     </div>
@@ -5461,11 +5448,11 @@ function App() {
                         {preset.label}
                       </button>
                     ))}
-                    
+
                     {/* Expiry info text */}
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '10px' }}>
-                      {newSessionExpiryHours > 0 
-                        ? `(หมดอายุอีกใน ${newSessionExpiryHours} ชม.)` 
+                      {newSessionExpiryHours > 0
+                        ? `(หมดอายุอีกใน ${newSessionExpiryHours} ชม.)`
                         : '(สามารถเข้าดูได้ตลอดเวลา)'}
                     </span>
                   </div>
@@ -5473,17 +5460,17 @@ function App() {
 
                 {/* Actions */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-                  <button 
-                    type="button" 
-                    className="submit-btn" 
+                  <button
+                    type="button"
+                    className="submit-btn"
                     style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', margin: 0 }}
                     onClick={() => setShowAddSessionModal(false)}
                   >
                     ยกเลิก (Cancel)
                   </button>
-                  <button 
-                    type="submit" 
-                    className="submit-btn" 
+                  <button
+                    type="submit"
+                    className="submit-btn"
                     style={{ background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)', border: 'none', color: '#fff', margin: 0 }}
                   >
                     สร้างและบันทึกข้อมูล (Create & Setup)
@@ -5501,14 +5488,14 @@ function App() {
       {showAddMachineModal && (
         <div className="modal-backdrop" onClick={() => setShowAddMachineModal(false)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-            
+
             {/* Modal Header */}
             <div className="modal-header">
               <h3>
                 <Cpu size={22} color="var(--accent-blue)" />
                 เพิ่มเครื่องมือ / อุปกรณ์ใหม่ (Add Instrument)
               </h3>
-              <button 
+              <button
                 className="modal-close-btn"
                 onClick={() => setShowAddMachineModal(false)}
                 title="ปิด"
@@ -5519,14 +5506,14 @@ function App() {
 
             {/* Modal Body */}
             <form onSubmit={submitNewMachine} className="modal-body" style={{ margin: 0 }}>
-              
+
               <div>
                 <label className="modal-label">🖥️ ชื่อเครื่องมือ / bioreactor เครื่องใหม่ *</label>
-                <input 
-                  type="text" 
-                  value={newMachineName} 
+                <input
+                  type="text"
+                  value={newMachineName}
                   onChange={(e) => setNewMachineName(e.target.value)}
-                  placeholder="เช่น Bioreactor 2 หรือ Fermenter 20L" 
+                  placeholder="เช่น Bioreactor 2 หรือ Fermenter 20L"
                   className="modal-input"
                   required
                   style={{ width: '100%', padding: '10px' }}
@@ -5535,17 +5522,17 @@ function App() {
 
               {/* Actions */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-                <button 
-                  type="button" 
-                  className="submit-btn" 
+                <button
+                  type="button"
+                  className="submit-btn"
                   style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', margin: 0 }}
                   onClick={() => setShowAddMachineModal(false)}
                 >
                   ยกเลิก
                 </button>
-                <button 
-                  type="submit" 
-                  className="submit-btn" 
+                <button
+                  type="submit"
+                  className="submit-btn"
                   style={{ background: 'linear-gradient(135deg, var(--accent-blue), #2563eb)', border: 'none', color: '#fff', margin: 0 }}
                 >
                   สร้างเครื่องมือใหม่
