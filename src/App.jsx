@@ -783,10 +783,21 @@ function App() {
   };
   const formatCreatedAt = (v) => {
     if (!v) return '';
-    if (v.includes(',') || !v.includes('T')) return v;
-    const d = new Date(v);
-    if (isNaN(d.getTime())) return v;
-    return formatDateTime(d);
+    let d;
+    if (v.includes(',')) {
+      d = new Date(v.split(',')[0]);
+    } else if (v.includes(' ')) {
+      d = new Date(v.split(' ')[0]);
+    } else {
+      d = new Date(v);
+    }
+    if (isNaN(d.getTime())) {
+      const parts = v.split(/[\s,T]/);
+      if (parts.length > 0) return parts[0];
+      return v;
+    }
+    const pad2 = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   };
   // Authentication State
   const [userRole, setUserRole] = useState(() => {
@@ -3121,7 +3132,6 @@ function App() {
                         <th>ชื่อรอบบันทึก (Session Name)</th>
                         <th>วันที่สร้าง (Created At)</th>
                         <th>จำนวนจุดข้อมูล (Data Points)</th>
-                        <th>รหัสงาน (Session ID)</th>
                         <th style={{ textAlign: 'center' }}>การจัดการ</th>
                       </tr>
                     </thead>
@@ -3155,7 +3165,6 @@ function App() {
                               <td style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{job.name}</td>
                               <td>{formatCreatedAt(job.createdAt)}</td>
                               <td>{job.data?.length || 0} จุด</td>
-                              <td><code>{job.id}</code></td>
                               <td>
                                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                   <button
