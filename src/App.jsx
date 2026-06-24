@@ -806,6 +806,8 @@ function App() {
   const [activeCustomerJobId, setActiveCustomerJobId] = useState(() => {
     return localStorage.getItem('bioprocess-customer-job-id') || null;
   });
+  // Message shown on login screen when session expires
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null);
 
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -1232,7 +1234,10 @@ function App() {
     if (userRole === 'customer' && activeCustomerJobId && jobs.length > 0) {
       const activeJob = jobs.find(j => j.id === activeCustomerJobId);
       if (activeJob && activeJob.expiresAt && new Date() > new Date(activeJob.expiresAt)) {
-        alert("ระยะเวลาการเข้าใช้งานเซสชันนี้หมดอายุแล้ว ระบบจะนำคุณออกจากระบบโดยอัตโนมัติ");
+        // Redirect to login with expiry message (no alert popup)
+        setSessionExpiredMessage(
+          `สิทธิ์การเข้าใช้งานสำหรับรอบรัน "${activeJob.name || activeCustomerJobId}" หมดอายุแล้ว กรุณาติดต่อเจ้าหน้าที่เพื่อขอลิงก์ใหม่`
+        );
         setUserRole(null);
         setActiveCustomerJobId(null);
         setCurrentAppView('monitoring');
@@ -2313,6 +2318,40 @@ function App() {
         <div className="login-orb login-orb-1" />
         <div className="login-orb login-orb-2" />
         <div className="login-orb login-orb-3" />
+
+        {/* Session Expired Banner */}
+        {sessionExpiredMessage && (
+          <div style={{
+            position: 'fixed', top: '1.25rem', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 9999, width: 'min(480px, 92vw)',
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(185,28,28,0.22))',
+            border: '1px solid rgba(239,68,68,0.45)',
+            borderRadius: '14px',
+            padding: '0.85rem 1.1rem',
+            display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+            boxShadow: '0 8px 32px rgba(239,68,68,0.22)',
+            animation: 'fadeInDown 0.4s ease'
+          }}>
+            <span style={{ fontSize: '1.3rem', flexShrink: 0, marginTop: '1px' }}>⏰</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: 700, color: '#fca5a5', fontSize: '0.88rem', marginBottom: '2px' }}>
+                สิทธิ์การเข้าใช้งานหมดอายุแล้ว
+              </p>
+              <p style={{ margin: 0, color: '#fecaca', fontSize: '0.8rem', lineHeight: 1.5 }}>
+                {sessionExpiredMessage}
+              </p>
+            </div>
+            <button
+              onClick={() => setSessionExpiredMessage(null)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#fca5a5', fontSize: '1.1rem', padding: '2px 4px',
+                flexShrink: 0, lineHeight: 1
+              }}
+              title="ปิด"
+            >×</button>
+          </div>
+        )}
 
         <div className="login-card-wrapper">
           <div className="login-card-inner">
