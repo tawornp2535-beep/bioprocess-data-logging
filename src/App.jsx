@@ -2791,7 +2791,21 @@ function App() {
               </div>
 
               {/* Category: Management */}
-              <div className="sidebar-menu-header">Management</div>
+              <div className="sidebar-menu-header">DATA MANAGEMENT</div>
+
+              {/* Menu Manual Data Entry */}
+              <div
+                className={`sidebar-menu-item ${currentAppView === 'manual_entry' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('manual_entry');
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <span className="sidebar-menu-link">
+                  <PlusCircle size={18} />
+                  Manual Data Entry
+                </span>
+              </div>
 
               {/* Menu Customer Database */}
               <div
@@ -4008,187 +4022,19 @@ function App() {
             )}
           </div>
 
-        ) : (
-          /* MONITORING VIEW */
-          <>
-            <header className="dashboard-header" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                {/* Instrument and Session static labels (no dropdowns as requested) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🖥️ <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>เครื่องมือ:</span>{' '}
-                    <span style={{ color: showStandby ? 'var(--text-secondary)' : 'white' }}>
-                      {showStandby ? 'Standby' : (currentMachine?.name || '—')}
-                    </span>
-                  </h2>
-
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    📁 <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>รอบรัน:</span>{' '}
-                    <span style={{ color: showStandby ? 'var(--text-secondary)' : 'var(--accent-blue)' }}>
-                      {showStandby ? 'Standby' : (currentJob?.name || '—')}
-                    </span>
-                  </h2>
-                </div>
-
-                {currentJob && (
-                  <div className="nav-tabs" style={{ margin: 0 }}>
-                    <button
-                      className={`nav-tab ${activeTab === 'diagram' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('diagram')}
-                    >
-                      <Cpu size={16} /> Diagram
-                    </button>
-                    <button
-                      className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('dashboard')}
-                    >
-                      <LayoutDashboard size={16} /> Dashboard
-                    </button>
-                    <button
-                      className={`nav-tab ${activeTab === 'combined' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('combined')}
-                    >
-                      <ChartIcon size={16} /> Graph
-                    </button>
-                    <button
-                      className={`nav-tab ${activeTab === 'table' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('table')}
-                    >
-                      <TableIcon size={16} /> Table
-                    </button>
-                    <button
-                      className={`nav-tab ${activeTab === 'ai' ? 'active' : ''}`}
-                      onClick={() => setActiveTab('ai')}
-                    >
-                      <MessageSquare size={16} /> AI Assistant
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="header-controls" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <button
-                  className={`theme-toggle-btn`}
-                  onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-                  title="Toggle theme"
-                  style={{ margin: 0 }}
-                >
-                  {theme === 'dark' ? '🌙' : '☀️'}
-                </button>
-                {currentJob && userRole === 'admin' && currentJob.status !== 'finished' && (
-                  <button
-                    className="status-control-btn btn-stop-machine"
-                    onClick={() => handleToggleJobStatus(currentJob.id, currentJob.status || 'running')}
-                    style={{ margin: 0, height: '38px', padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, background: 'linear-gradient(135deg, #dc2626, #b91c1c)', borderColor: '#dc2626' }}
-                  >
-                    ✅ เสร็จสิ้นงาน
-                  </button>
-                )}
-                {currentJob && currentJob.status === 'finished' && (
-                  <span style={{
-                    height: '38px', padding: '0 14px', display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    fontSize: '0.82rem', fontWeight: 700, color: '#86efac',
-                    background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: '8px'
-                  }}>
-                    🏁 งานเสร็จสิ้นแล้ว
-                  </span>
-                )}
-                <button
-                  className={`toggle-btn ${isReplay ? 'active' : ''}`}
-                  onClick={() => {
-                    if (isReplay) {
-                      setIsReplay(false);
-                      setIsReplayPlaying(false);
-                      setReplayIndex(1);
-                    } else {
-                      // start replay from stored data
-                      setReplayIndex(1);
-                      setIsReplay(true);
-                      setIsReplayPlaying(true);
-                    }
-                  }}
-                  disabled={!currentJob || currentJobData.length === 0}
-                  style={{ margin: 0 }}
-                >
-                  {isReplay ? 'Replay ON' : 'Replay'}
-                </button>
-                <button className="export-btn" onClick={exportToExcel} disabled={!currentJob} style={{ margin: 0 }}>
-                  <Download size={18} style={{ marginRight: '8px' }} /> Export Excel
-                </button>
-                <button className="export-btn" onClick={exportToPDF} disabled={!currentJob} style={{ margin: 0 }}>
-                  <Download size={18} style={{ marginRight: '8px' }} /> Export PDF
-                </button>
-                <button className="export-btn" onClick={exportToCSV} disabled={!currentJob} style={{ margin: 0 }}>
-                  <Download size={18} style={{ marginRight: '8px' }} /> Export CSV
-                </button>
-                {currentJob && userRole === 'admin' && (
-                  <button
-                    className="export-btn"
-                    onClick={() => {
-                      setShareModalJobId(currentJob.id);
-                      setShowCustomerShareModal(true);
-                    }}
-                    style={{ margin: 0, background: 'linear-gradient(135deg, var(--accent-green), #059669)', border: 'none', color: '#fff' }}
-                    title="ตั้งค่าการแชร์และคัดลอกลิงก์ให้ลูกค้า"
-                  >
-                    <Users size={18} style={{ marginRight: '8px' }} /> แชร์ลูกค้า
-                  </button>
-                )}
-                {/* Auto simulation removed */}
-              </div>
+        ) : currentAppView === 'manual_entry' ? (
+          /* MANUAL DATA ENTRY VIEW */
+          <div className="manual-entry-view">
+            <header className="dashboard-header">
+              <h2>Manual Data Entry</h2>
             </header>
 
-            {/* Global Parameter Visibility Selector Bar */}
-            {currentJob && (
-              <div className="glass-panel" style={{ padding: '0.75rem 1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  ⚙️ แสดงค่าพารามิเตอร์:
-                </span>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {[
-                    { key: 'temp', label: 'TEMP', color: 'var(--accent-red)' },
-                    { key: 'ph', label: 'pH', color: 'var(--accent-blue)' },
-                    { key: 'do', label: 'DO', color: 'var(--accent-green)' },
-                    { key: 'agit', label: 'AGIT', color: 'var(--accent-yellow)' },
-                    { key: 'air', label: 'AIR FLOW', color: 'var(--accent-purple)' },
-                    { key: 'level', label: 'VOLUME', color: 'var(--accent-green)' },
-                    { key: 'air_out', label: 'AIR OUT', color: 'var(--accent-blue)' },
-                    { key: 'heat', label: 'HEAT', color: 'var(--accent-yellow)' }
-                  ].map(p => {
-                    const active = visibleParameters[p.key];
-                    return (
-                      <button
-                        key={p.key}
-                        onClick={() => setVisibleParameters(prev => ({ ...prev, [p.key]: !prev[p.key] }))}
-                        style={{
-                          background: active ? `rgba(255,255,255,0.08)` : 'transparent',
-                          borderColor: active ? p.color : 'var(--border-color)',
-                          color: active ? 'white' : 'var(--text-secondary)',
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderRadius: '20px',
-                          padding: '4px 12px',
-                          fontSize: '0.8rem',
-                          fontWeight: active ? 600 : 400,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.2s ease',
-                          margin: 0
-                        }}
-                      >
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: active ? p.color : 'transparent', border: active ? 'none' : '1px solid var(--text-secondary)' }}></span>
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                </div>
+            {!currentJob ? (
+              <div className="glass-panel empty-state">
+                <FolderOpen size={48} opacity={0.5} style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }} />
+                <h2>กรุณาเลือกหรือสร้างรอบรัน (Session) ก่อนทำการบันทึกข้อมูล</h2>
               </div>
-            )}
-
-            {currentJob && userRole === 'admin' && !isViewingHistory && currentJob.status !== 'finished' && (
-              /* Manual Input Form */
+            ) : (
               <div className={`glass-panel form-container ${currentJob.status === 'stopped' ? 'machine-stopped-mode' : ''}`}>
                 <h2 className="form-title">Manual Data Entry (Record Data {showStandby ? 'Standby' : (currentMachine?.name || 'เครื่องมือ')})</h2>
                 {currentJob.status === 'stopped' && (
@@ -4380,8 +4226,6 @@ function App() {
                         }}
                       />
                     </div>
-
-                    {/* Date and Time are set automatically to current values */}
                   </div>
                   <button type="submit" className="btn btn-primary" style={{ minWidth: '160px', margin: 0 }} disabled={currentJob?.status === 'finished'}>
                     <PlusCircle size={18} style={{ marginRight: '8px' }} /> Add Record
@@ -4389,6 +4233,187 @@ function App() {
                 </form>
               </div>
             )}
+          </div>
+        ) : (
+          /* MONITORING VIEW */
+          <>
+            <header className="dashboard-header" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                {/* Instrument and Session static labels (no dropdowns as requested) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    🖥️ <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>เครื่องมือ:</span>{' '}
+                    <span style={{ color: showStandby ? 'var(--text-secondary)' : 'white' }}>
+                      {showStandby ? 'Standby' : (currentMachine?.name || '—')}
+                    </span>
+                  </h2>
+
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    📁 <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>รอบรัน:</span>{' '}
+                    <span style={{ color: showStandby ? 'var(--text-secondary)' : 'var(--accent-blue)' }}>
+                      {showStandby ? 'Standby' : (currentJob?.name || '—')}
+                    </span>
+                  </h2>
+                </div>
+
+                {currentJob && (
+                  <div className="nav-tabs" style={{ margin: 0 }}>
+                    <button
+                      className={`nav-tab ${activeTab === 'diagram' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('diagram')}
+                    >
+                      <Cpu size={16} /> Diagram
+                    </button>
+                    <button
+                      className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('dashboard')}
+                    >
+                      <LayoutDashboard size={16} /> Dashboard
+                    </button>
+                    <button
+                      className={`nav-tab ${activeTab === 'combined' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('combined')}
+                    >
+                      <ChartIcon size={16} /> Graph
+                    </button>
+                    <button
+                      className={`nav-tab ${activeTab === 'table' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('table')}
+                    >
+                      <TableIcon size={16} /> Table
+                    </button>
+                    <button
+                      className={`nav-tab ${activeTab === 'ai' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('ai')}
+                    >
+                      <MessageSquare size={16} /> AI Assistant
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="header-controls" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  className={`theme-toggle-btn`}
+                  onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                  title="Toggle theme"
+                  style={{ margin: 0 }}
+                >
+                  {theme === 'dark' ? '🌙' : '☀️'}
+                </button>
+                {currentJob && userRole === 'admin' && currentJob.status !== 'finished' && (
+                  <button
+                    className="status-control-btn btn-stop-machine"
+                    onClick={() => handleToggleJobStatus(currentJob.id, currentJob.status || 'running')}
+                    style={{ margin: 0, height: '38px', padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, background: 'linear-gradient(135deg, #dc2626, #b91c1c)', borderColor: '#dc2626' }}
+                  >
+                    ✅ เสร็จสิ้นงาน
+                  </button>
+                )}
+                {currentJob && currentJob.status === 'finished' && (
+                  <span style={{
+                    height: '38px', padding: '0 14px', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    fontSize: '0.82rem', fontWeight: 700, color: '#86efac',
+                    background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: '8px'
+                  }}>
+                    🏁 งานเสร็จสิ้นแล้ว
+                  </span>
+                )}
+                <button
+                  className={`toggle-btn ${isReplay ? 'active' : ''}`}
+                  onClick={() => {
+                    if (isReplay) {
+                      setIsReplay(false);
+                      setIsReplayPlaying(false);
+                      setReplayIndex(1);
+                    } else {
+                      // start replay from stored data
+                      setReplayIndex(1);
+                      setIsReplay(true);
+                      setIsReplayPlaying(true);
+                    }
+                  }}
+                  disabled={!currentJob || currentJobData.length === 0}
+                  style={{ margin: 0 }}
+                >
+                  {isReplay ? 'Replay ON' : 'Replay'}
+                </button>
+                <button className="export-btn" onClick={exportToExcel} disabled={!currentJob} style={{ margin: 0 }}>
+                  <Download size={18} style={{ marginRight: '8px' }} /> Export Excel
+                </button>
+                <button className="export-btn" onClick={exportToPDF} disabled={!currentJob} style={{ margin: 0 }}>
+                  <Download size={18} style={{ marginRight: '8px' }} /> Export PDF
+                </button>
+                <button className="export-btn" onClick={exportToCSV} disabled={!currentJob} style={{ margin: 0 }}>
+                  <Download size={18} style={{ marginRight: '8px' }} /> Export CSV
+                </button>
+                {currentJob && userRole === 'admin' && (
+                  <button
+                    className="export-btn"
+                    onClick={() => {
+                      setShareModalJobId(currentJob.id);
+                      setShowCustomerShareModal(true);
+                    }}
+                    style={{ margin: 0, background: 'linear-gradient(135deg, var(--accent-green), #059669)', border: 'none', color: '#fff' }}
+                    title="ตั้งค่าการแชร์และคัดลอกลิงก์ให้ลูกค้า"
+                  >
+                    <Users size={18} style={{ marginRight: '8px' }} /> แชร์ลูกค้า
+                  </button>
+                )}
+                {/* Auto simulation removed */}
+              </div>
+            </header>
+
+            {/* Global Parameter Visibility Selector Bar */}
+            {currentJob && (
+              <div className="glass-panel" style={{ padding: '0.75rem 1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  ⚙️ แสดงค่าพารามิเตอร์:
+                </span>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {[
+                    { key: 'temp', label: 'TEMP', color: 'var(--accent-red)' },
+                    { key: 'ph', label: 'pH', color: 'var(--accent-blue)' },
+                    { key: 'do', label: 'DO', color: 'var(--accent-green)' },
+                    { key: 'agit', label: 'AGIT', color: 'var(--accent-yellow)' },
+                    { key: 'air', label: 'AIR FLOW', color: 'var(--accent-purple)' },
+                    { key: 'level', label: 'VOLUME', color: 'var(--accent-green)' },
+                    { key: 'air_out', label: 'AIR OUT', color: 'var(--accent-blue)' },
+                    { key: 'heat', label: 'HEAT', color: 'var(--accent-yellow)' }
+                  ].map(p => {
+                    const active = visibleParameters[p.key];
+                    return (
+                      <button
+                        key={p.key}
+                        onClick={() => setVisibleParameters(prev => ({ ...prev, [p.key]: !prev[p.key] }))}
+                        style={{
+                          background: active ? `rgba(255,255,255,0.08)` : 'transparent',
+                          borderColor: active ? p.color : 'var(--border-color)',
+                          color: active ? 'white' : 'var(--text-secondary)',
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderRadius: '20px',
+                          padding: '4px 12px',
+                          fontSize: '0.8rem',
+                          fontWeight: active ? 600 : 400,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s ease',
+                          margin: 0
+                        }}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: active ? p.color : 'transparent', border: active ? 'none' : '1px solid var(--text-secondary)' }}></span>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+
 
             {!currentJob ? (
               <div className="glass-panel empty-state">
