@@ -2968,16 +2968,79 @@ function App() {
               {machines.map(m => {
                 const machineJobs = jobs.filter(j => j.machineId === m.id);
                 const isActive = m.id === currentMachineId;
+                const imgSrc = m.imageData || '/bioreactor.png';
+                const fileInputId = `machine-img-input-${m.id}`;
 
                 return (
                   <div key={m.id} className="glass-panel" style={{ padding: '1.5rem', border: isActive ? '1px solid rgba(0, 240, 255, 0.4)' : '1px solid var(--border-color)', boxShadow: isActive ? '0 0 15px rgba(0, 240, 255, 0.15)' : 'none', position: 'relative' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🖥️</div>
+
+                    {/* Hidden File Input */}
+                    <input
+                      id={fileInputId}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert('ขนาดไฟล์ต้องไม่เกิน 5 MB');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const base64 = ev.target.result;
+                          fetch(`/api/machines/${m.id}/image`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ imageData: base64 })
+                          }).then(res => res.ok && res.json()).then(data => data && applyDBUpdate(data));
+                        };
+                        reader.readAsDataURL(file);
+                        // reset input so same file can be re-selected
+                        e.target.value = '';
+                      }}
+                    />
+
+                    {/* Image area — click to upload */}
+                    <div
+                      style={{ marginBottom: '0.75rem', position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+                      title="คลิกเพื่อเปลี่ยนรูปเครื่องมือ"
+                      onClick={() => document.getElementById(fileInputId)?.click()}
+                    >
+                      <img
+                        src={imgSrc}
+                        alt={m.name}
+                        style={{
+                          width: '80px',
+                          height: '80px',
+                          objectFit: m.imageData ? 'cover' : 'contain',
+                          borderRadius: m.imageData ? '10px' : '0',
+                          filter: isActive ? 'drop-shadow(0 0 8px rgba(0,240,255,0.6))' : 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))',
+                          transition: 'filter 0.3s, transform 0.2s',
+                          border: m.imageData ? '2px solid rgba(0,240,255,0.25)' : 'none',
+                          display: 'block'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                      />
+                      {/* Camera overlay icon */}
+                      <div style={{
+                        position: 'absolute', bottom: 0, right: 0,
+                        background: 'rgba(0,240,255,0.18)', backdropFilter: 'blur(4px)',
+                        border: '1px solid rgba(0,240,255,0.35)',
+                        borderRadius: '6px', padding: '2px 5px',
+                        fontSize: '0.65rem', color: '#00f0ff', lineHeight: 1.4,
+                        pointerEvents: 'none'
+                      }}>📷</div>
+                    </div>
+
                     <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem', color: isActive ? '#00f0ff' : 'var(--text-primary)' }}>{m.name}</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                       มีรันบันทึกข้อมูลทั้งหมด: <strong>{machineJobs.length} รอบ</strong>
                     </p>
 
-                    <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                       <button
                         className="replay-close-btn"
                         style={{
@@ -3018,6 +3081,49 @@ function App() {
                       >
                         แก้ไขชื่อ
                       </button>
+                      {/* Upload image button */}
+                      <button
+                        style={{
+                          padding: '6px 10px', fontSize: '0.8rem', margin: 0,
+                          background: 'rgba(139,92,246,0.12)',
+                          border: '1px solid rgba(139,92,246,0.35)',
+                          color: '#a78bfa', borderRadius: '8px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          transition: 'background 0.18s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.25)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(139,92,246,0.12)'}
+                        title="อัปโหลดรูปเครื่องมือจริง"
+                        onClick={() => document.getElementById(fileInputId)?.click()}
+                      >
+                        📷 อัปโหลดรูป
+                      </button>
+                      {/* Remove custom image button (only if custom image is set) */}
+                      {m.imageData && (
+                        <button
+                          style={{
+                            padding: '6px 10px', fontSize: '0.8rem', margin: 0,
+                            background: 'rgba(239,68,68,0.08)',
+                            border: '1px solid rgba(239,68,68,0.3)',
+                            color: '#f87171', borderRadius: '8px', cursor: 'pointer',
+                            transition: 'background 0.18s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.08)'}
+                          title="ลบรูปที่อัปโหลด กลับไปใช้รูป default"
+                          onClick={() => {
+                            if (window.confirm('ลบรูปที่อัปโหลด แล้วกลับใช้รูป default?')) {
+                              fetch(`/api/machines/${m.id}/image`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ imageData: null })
+                              }).then(res => res.ok && res.json()).then(data => data && applyDBUpdate(data));
+                            }
+                          }}
+                        >
+                          🗑 ลบรูป
+                        </button>
+                      )}
                       {machines.length > 1 && (
                         <button
                           className="delete-row-btn"
@@ -3044,6 +3150,7 @@ function App() {
                   </div>
                 );
               })}
+
             </div>
           </div>
         ) : currentAppView === 'sessions' ? (
@@ -3158,8 +3265,9 @@ function App() {
                           return (
                             <tr key={job.id}>
                               <td style={{ fontWeight: 600 }}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                  🖥️ {machine?.name || 'Unknown'}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                  <img src="/bioreactor.png" alt="Bioreactor" style={{ width: '24px', height: '24px', objectFit: 'contain', flexShrink: 0 }} />
+                                  {machine?.name || 'Unknown'}
                                 </span>
                               </td>
                               <td style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{job.name}</td>

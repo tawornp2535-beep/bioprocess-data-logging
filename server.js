@@ -558,6 +558,30 @@ app.put('/api/machines/:id', async (req, res) => {
   res.json(await getDB());
 });
 
+// ── Machine Image Upload ──────────────────────────────────
+
+app.put('/api/machines/:id/image', async (req, res) => {
+  const { id } = req.params;
+  const { imageData } = req.body; // base64 string or null (to remove)
+
+  if (isCloud) {
+    try {
+      await db.collection(MACHINES_COL).doc(id).update({ imageData: imageData || null });
+    } catch (e) {
+      console.error('Firestore error updating machine image:', e);
+      return res.status(500).json({ error: 'Failed to update machine image' });
+    }
+  } else {
+    const localDB = readLocalDB();
+    localDB.machines = localDB.machines.map(m =>
+      m.id === id ? { ...m, imageData: imageData || null } : m
+    );
+    writeLocalDB(localDB);
+  }
+
+  res.json(await getDB());
+});
+
 app.delete('/api/machines/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -1076,7 +1100,7 @@ ${dataSummary}
 3. **การตรวจพบสิ่งผิดปกติ (Anomaly Detection)**: ระบุจุดเบี่ยงเบนหรือความผิดปกติใดๆ (เช่น สัญญาณพารามิเตอร์แกว่ง, ค่าตกลงรวดเร็ว, การเติมสารชดเชยล่าช้า) หรือยืนยันว่ารันปกติดี
 4. **ข้อเสนอแนะในการควบคุมกระบวนการ (Optimization Recommendations)**: ข้อแนะนำที่เป็นรูปธรรมสำหรับการปรับจูนค่าพารามิเตอร์ถัดไปเพื่อเพิ่มความเสถียรและ Yield`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1177,7 +1201,7 @@ ${dataSummary}
       parts: [{ text: lastPromptText }]
     });
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents })
