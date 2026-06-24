@@ -1108,6 +1108,7 @@ function App() {
 
   const [showCustomerShareModal, setShowCustomerShareModal] = useState(false);
   const [shareModalJobId, setShareModalJobId] = useState(null);
+  const [shareInvitationText, setShareInvitationText] = useState('');
 
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
@@ -5247,6 +5248,7 @@ function App() {
                 </button>
               </div>
 
+
               {/* Scrubber Slider */}
               <div className="replay-slider-container">
                 <input
@@ -5264,6 +5266,7 @@ function App() {
                   จุดที่ {replayIndex} / {sortedFullData.length} (ชั่วโมงเลี้ยงเชื้อ: {chartData[replayIndex - 1]?.cultureHour?.toFixed(1) || '0.0'} ชม.)
                 </span>
               </div>
+
 
               {/* Speed & Close Group */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -5363,6 +5366,12 @@ function App() {
               const customerName = assignedCustomer ? assignedCustomer.companyName : "[ชื่อลูกค้า]";
               const expiryInfoText = job.expiresAt ? formatDateTime(job.expiresAt) : "ไม่มีวันหมดอายุ";
               const invitationText = `เรียนคุณ ${customerName},\n\nทางแล็บขอส่งลิงก์สำหรับเข้าดูข้อมูลไบโอโพรเซสรอบรัน "${job.name}" (${machine?.name || 'เครื่องมือ'}) แบบเรียลไทม์\n\nลิงก์เข้าสู่ระบบ: ${loginUrl}\nวันหมดอายุ: ${expiryInfoText}\n\nขอบคุณค่ะ/ครับ\nDBMS System`;
+
+              // Auto-populate editable text when first opening / when job changes
+              const currentEditableText = shareInvitationText || invitationText;
+              if (!shareInvitationText) {
+                setTimeout(() => setShareInvitationText(invitationText), 0);
+              }
 
               return (
                 <div className="modal-body">
@@ -5494,11 +5503,11 @@ function App() {
                           className="btn btn-primary btn-small"
                           style={{ margin: 0 }}
                           onClick={async () => {
-                            await navigator.clipboard.writeText(invitationText);
+                            await navigator.clipboard.writeText(currentEditableText);
                             alert("คัดลอกข้อความคำเชิญสำหรับส่งให้ลูกค้าเรียบร้อยแล้ว!");
                           }}
                         >
-                          📋 คัดลอกข้อความคำเชิญ
+                          📋 คัดลอกข้อความ
                         </button>
                       )}
                     </div>
@@ -5510,10 +5519,54 @@ function App() {
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>อีเมล: {assignedCustomer.email || 'ไม่ได้ระบุ'}</div>
                         </div>
 
-                        <div className="modal-preview-box">
-                          {invitationText}
+                        {/* Editable invitation textarea */}
+                        <div style={{ position: 'relative' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>✏️ แก้ไขข้อความได้โดยตรง</span>
+                            <button
+                              type="button"
+                              onClick={() => setShareInvitationText(invitationText)}
+                              style={{
+                                fontSize: '0.75rem', padding: '3px 8px', borderRadius: '6px',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🔄 รีเซ็ตข้อความ
+                            </button>
+                          </div>
+                          <textarea
+                            value={currentEditableText}
+                            onChange={(e) => setShareInvitationText(e.target.value)}
+                            rows={9}
+                            style={{
+                              width: '100%',
+                              padding: '12px 14px',
+                              borderRadius: '10px',
+                              border: '1px solid rgba(0, 240, 255, 0.2)',
+                              background: 'rgba(0, 15, 30, 0.5)',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.85rem',
+                              lineHeight: 1.65,
+                              resize: 'vertical',
+                              fontFamily: 'inherit',
+                              outline: 'none',
+                              transition: 'border-color 0.2s, box-shadow 0.2s',
+                              boxSizing: 'border-box'
+                            }}
+                            onFocus={e => {
+                              e.target.style.borderColor = 'rgba(0,240,255,0.5)';
+                              e.target.style.boxShadow = '0 0 0 3px rgba(0,240,255,0.08)';
+                            }}
+                            onBlur={e => {
+                              e.target.style.borderColor = 'rgba(0,240,255,0.2)';
+                              e.target.style.boxShadow = 'none';
+                            }}
+                          />
                         </div>
                       </div>
+
                     ) : (
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.15)', textAlign: 'center', lineHeight: 1.5 }}>
                         ⚠️ ยังไม่ได้ระบุข้อมูลลูกค้ารับผิดชอบเครื่องมือ "{machine?.name || ''}" ในฐานข้อมูล<br />
