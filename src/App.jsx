@@ -243,7 +243,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   const agitSpeedSec = !isMachineStoppedVisual && agit_read > 0 ? Math.max(0.1, 60 / agit_read) : 0;
   const agitSpinStyle = agitSpeedSec > 0 ? {
     animation: `spin-blade ${agitSpeedSec}s linear infinite`,
-    transformOrigin: '150px 240px'
+    transformOrigin: '150px 307.5px'
   } : {};
 
   // Bubbling animation styling based on Air Flow
@@ -460,6 +460,9 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             <line x1="150" y1="100" x2="150" y2="330" stroke="#1f2937" strokeWidth="6" strokeLinecap="round" />
             <line x1="150" y1="100" x2="150" y2="330" stroke="#d1d5db" strokeWidth="2" />
 
+            {/* Sparger Ring at bottom (Static) */}
+            <line x1="100" y1="340" x2="200" y2="340" stroke="#4b5563" strokeWidth="3" strokeDasharray="3,3" />
+
             {/* Agitator Blades (Impeller) at bottom */}
             {agit_read > 0 ? (
               <g style={agitSpinStyle}>
@@ -468,15 +471,12 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 {/* Left/Right Turbine Blades */}
                 <path d="M 100 302 L 135 305 L 135 310 L 100 313 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
                 <path d="M 200 302 L 165 305 L 165 310 L 200 313 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
-                {/* Sparger Ring at bottom */}
-                <line x1="100" y1="340" x2="200" y2="340" stroke="#4b5563" strokeWidth="3" strokeDasharray="3,3" />
               </g>
             ) : (
               <g>
                 <rect x="135" y="300" width="30" height="15" rx="3" fill="#374151" />
                 <path d="M 100 302 L 135 305 L 135 310 L 100 313 Z" fill="#4b5563" />
                 <path d="M 200 302 L 165 305 L 165 310 L 200 313 Z" fill="#4b5563" />
-                <line x1="100" y1="340" x2="200" y2="340" stroke="#4b5563" strokeWidth="3" strokeDasharray="3,3" />
               </g>
             )}
 
