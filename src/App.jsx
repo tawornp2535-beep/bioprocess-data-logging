@@ -591,34 +591,77 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             <path d="M 200 370 L 200 420" fill="none" stroke="#4b5563" strokeWidth="4" />
             <polygon points="190,385 210,385 190,405 210,405" fill="#374151" stroke="#1f2937" strokeWidth="1" />
 
-            {/* Sensor Probe Lines (Left Wall) — Dynamic, scaled from maxVolumeLiters */}
+            {/* Volume Scale Ruler (Left Wall) — 50 L ticks from maxVolumeLiters down to 0 */}
             {(() => {
-              // Tank body: top=120, bottom=350 → total height=230px for full volume
-              const tankTop = 120;
               const tankBottom = 350;
-              const tankH = tankBottom - tankTop; // 230px
-              // Helper: convert volume fraction to Y position (top = max)
-              const volToY = (frac) => tankBottom - frac * tankH;
+              const tankH = 230; // px for full volume
+              const volToY = (vol) => tankBottom - (vol / maxVolumeLiters) * tankH;
 
-              const probes = [
-                { frac: 0.85, color: '#3b82f6', label: 'pH',   vol: (0.85 * maxVolumeLiters) },
-                { frac: 0.60, color: '#10b981', label: 'DO',   vol: (0.60 * maxVolumeLiters) },
-                { frac: 0.35, color: '#ef4444', label: 'Temp', vol: (0.35 * maxVolumeLiters) },
-                { frac: 0.12, color: '#f59e0b', label: 'Lv',   vol: (0.12 * maxVolumeLiters) },
-              ];
+              // Step size: 50 L for large tanks, smaller for small tanks
+              const step = maxVolumeLiters <= 20 ? 2
+                : maxVolumeLiters <= 100 ? 10
+                : maxVolumeLiters <= 300 ? 25
+                : 50;
 
-              return probes.map((p) => {
-                const y = volToY(p.frac);
-                return (
-                  <g key={p.label}>
-                    <path d={`M 38 ${y} L 80 ${y}`} stroke={p.color} strokeWidth="2" strokeDasharray="3 3" />
-                    <rect x="74" y={y - 4} width="10" height="8" fill={p.color} />
-                    <text x="35" y={y + 4} fill={p.color} fontSize="8" textAnchor="end" fontFamily="monospace">
-                      {p.vol.toFixed(0)}L
-                    </text>
-                  </g>
-                );
-              });
+              const ticks = [];
+              for (let v = step; v < maxVolumeLiters; v += step) {
+                ticks.push(v);
+              }
+
+              return (
+                <g>
+                  {/* Vertical ruler line */}
+                  <line x1="63" y1={volToY(maxVolumeLiters)} x2="63" y2={volToY(0)} stroke="#64748b" strokeWidth="1" />
+                  {/* Max label */}
+                  <line x1="58" y1={volToY(maxVolumeLiters)} x2="70" y2={volToY(maxVolumeLiters)} stroke="#94a3b8" strokeWidth="1.5" />
+                  <text x="55" y={volToY(maxVolumeLiters) + 4} fill="#94a3b8" fontSize="7.5" textAnchor="end" fontFamily="monospace">{maxVolumeLiters.toFixed(0)}L</text>
+                  {/* 0 label */}
+                  <line x1="58" y1={volToY(0)} x2="70" y2={volToY(0)} stroke="#64748b" strokeWidth="1" />
+                  <text x="55" y={volToY(0) + 4} fill="#64748b" fontSize="7.5" textAnchor="end" fontFamily="monospace">0L</text>
+                  {/* Intermediate ticks */}
+                  {ticks.map((v) => {
+                    const y = volToY(v);
+                    const isMajor = v % (step * 2) === 0;
+                    // Current level indicator line
+                    const isNearLevel = Math.abs(v - level_read) < step * 0.5;
+                    return (
+                      <g key={v}>
+                        <line
+                          x1={isMajor ? "56" : "60"}
+                          y1={y}
+                          x2="70"
+                          y2={y}
+                          stroke={isNearLevel ? '#f59e0b' : (isMajor ? '#94a3b8' : '#475569')}
+                          strokeWidth={isMajor ? "1.5" : "1"}
+                        />
+                        {isMajor && (
+                          <text
+                            x="53"
+                            y={y + 4}
+                            fill={isNearLevel ? '#f59e0b' : '#94a3b8'}
+                            fontSize="7.5"
+                            textAnchor="end"
+                            fontFamily="monospace"
+                            fontWeight={isNearLevel ? 'bold' : 'normal'}
+                          >
+                            {v}L
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+                  {/* Current liquid level indicator arrow */}
+                  {level_read > 0 && level_read <= maxVolumeLiters && (
+                    <g>
+                      <line x1="56" y1={volToY(level_read)} x2="80" y2={volToY(level_read)} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="2 2" />
+                      <polygon
+                        points={`70,${volToY(level_read) - 4} 70,${volToY(level_read) + 4} 80,${volToY(level_read)}`}
+                        fill="#f59e0b"
+                      />
+                    </g>
+                  )}
+                </g>
+              );
             })()}
           </svg>
 
