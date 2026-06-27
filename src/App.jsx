@@ -354,6 +354,9 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 <stop offset="50%" stopColor="#f87171" stopOpacity="0.4" />
                 <stop offset="100%" stopColor="#ef4444" stopOpacity="0.8" />
               </linearGradient>
+              <clipPath id="liquid-clip">
+                <path d="M 74 350 L 74 125 L 226 125 L 226 350 A 76 46 0 0 1 74 350 Z" />
+              </clipPath>
             </defs>
 
             {/* Heating Jacket Glow (Wrapper behind reactor) */}
@@ -381,14 +384,38 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             <path d="M 70 350 A 80 50 0 0 0 230 350" fill="url(#metal-grad)" stroke="#1e293b" strokeWidth="2" />
 
             {/* Inside Liquid Media (Golden broth) */}
-            {level_read > 0 && (
-              <path
-                d={`M 74 350 L 74 ${360 - (level_read / 100) * 230} L 226 ${360 - (level_read / 100) * 230} L 226 350 A 76 46 0 0 1 74 350 Z`}
-                fill="url(#media-grad)"
-                stroke="#d97706"
-                strokeWidth="1"
-              />
-            )}
+            {level_read > 0 && (() => {
+              const liquidTopY = 360 - (level_read / 100) * 230;
+              const amp = isMachineStoppedVisual ? 0.5 : Math.min(4, 1 + (agit_read / 80));
+              const wavePath = `M -100 ${liquidTopY}
+                Q -75 ${liquidTopY - amp} -50 ${liquidTopY}
+                T 0 ${liquidTopY}
+                T 50 ${liquidTopY}
+                T 100 ${liquidTopY}
+                T 150 ${liquidTopY}
+                T 200 ${liquidTopY}
+                T 250 ${liquidTopY}
+                T 300 ${liquidTopY}
+                T 350 ${liquidTopY}
+                L 350 400 L -100 400 Z`;
+              const waveSpeedSec = !isMachineStoppedVisual && agit_read > 0 
+                ? Math.max(0.6, 5 - (agit_read / 100)) 
+                : 8;
+              return (
+                <g clipPath="url(#liquid-clip)">
+                  <path
+                    d={wavePath}
+                    fill="url(#media-grad)"
+                    stroke="#d97706"
+                    strokeWidth="1"
+                    className="liquid-wave-animated"
+                    style={{
+                      animationDuration: `${waveSpeedSec}s`
+                    }}
+                  />
+                </g>
+              );
+            })()}
 
             {/* Rising Bubbles (Simulated Gas Sparger) */}
             {air_read > 0 && level_read > 20 && (

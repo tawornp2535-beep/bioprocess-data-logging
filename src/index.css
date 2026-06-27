@@ -1623,6 +1623,20 @@ body {
   }
 }
 
+@keyframes wave-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100px);
+  }
+}
+
+.liquid-wave-animated {
+  animation: wave-slide 4s linear infinite;
+  transform-origin: center;
+}
+
 @keyframes bubble-rise {
   0% {
     transform: translateY(0) scale(0.8);
