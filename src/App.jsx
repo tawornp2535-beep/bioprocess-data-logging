@@ -150,6 +150,8 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
     );
   }
 
+  const maxVolumeLiters = aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
+
   // Extract PV & SV
   const temp_set = typeof dataPoint.temp_set === 'number' ? dataPoint.temp_set : 37.0;
   const temp_read = typeof dataPoint.temp_read === 'number' ? dataPoint.temp_read : 37.0;
@@ -162,8 +164,8 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   const air_set = typeof dataPoint.air_set === 'number' ? dataPoint.air_set : 2.0;
   const air_read = typeof dataPoint.air_read === 'number' ? dataPoint.air_read : 2.0;
 
-  const level_set = typeof dataPoint.level_set === 'number' ? dataPoint.level_set : 65.0;
-  const level_read = typeof dataPoint.level_read === 'number' ? dataPoint.level_read : 65.0;
+  const level_set = typeof dataPoint.level_set === 'number' ? dataPoint.level_set : (0.65 * maxVolumeLiters);
+  const level_read = typeof dataPoint.level_read === 'number' ? dataPoint.level_read : (0.65 * maxVolumeLiters);
   const air_out_set = typeof dataPoint.air_out_set === 'number' ? dataPoint.air_out_set : parseFloat((air_set * 0.96).toFixed(2));
   const air_out_read = typeof dataPoint.air_out_read === 'number' ? dataPoint.air_out_read : parseFloat((air_read * 0.96).toFixed(2));
   const heat_set = typeof dataPoint.heat_set === 'number' ? dataPoint.heat_set : 0.0;
@@ -177,16 +179,15 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   // VVM calculation: (Air Flow in L/min) / (Working Liquid/Fermentation Volume in Liters)
   const vvmCalcType = aboutSystem?.vvmCalcType || 'dynamic';
   const airUnit = aboutSystem?.airUnit || 'mlmin';
-  
+
   // Convert air_read to L/min if it is in mL/min
   const airLitersPerMinute = airUnit === 'mlmin' ? (air_read / 1000) : air_read;
-  
-  const maxVolumeLiters = aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
+
   let workingVolumeLiters = 5.0;
   if (vvmCalcType === 'constant') {
     workingVolumeLiters = aboutSystem?.constantVolumeLiters !== undefined ? Number(aboutSystem.constantVolumeLiters) : 3.5;
   } else {
-    workingVolumeLiters = level_read > 0 ? (level_read / 100) * maxVolumeLiters : maxVolumeLiters;
+    workingVolumeLiters = level_read > 0 ? level_read : maxVolumeLiters;
   }
   if (workingVolumeLiters <= 0) workingVolumeLiters = 5.0; // protection against zero/negative division
   const calculatedVvm = (airLitersPerMinute / workingVolumeLiters).toFixed(2);
@@ -202,9 +203,9 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
 
   const timestampStr = dataPoint.timestamp
     ? (() => {
-        const d = new Date(dataPoint.timestamp);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-      })()
+      const d = new Date(dataPoint.timestamp);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    })()
     : `${dataPoint.date || ''} ${dataPoint.time || ''}`;
 
   // Helper to draw inline SVG sparklines
@@ -414,7 +415,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
 
             {/* Inside Liquid Media (Golden broth) */}
             {level_read > 0 && (() => {
-              const liquidTopY = 360 - (level_read / 100) * 230;
+              const liquidTopY = 360 - (level_read / maxVolumeLiters) * 230;
               const amp = isMachineStoppedVisual ? 0.5 : Math.min(4, 1 + (agit_read / 80));
               const wavePath = `M -100 ${liquidTopY}
                 Q -75 ${liquidTopY - amp} -50 ${liquidTopY}
@@ -427,8 +428,8 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 T 300 ${liquidTopY}
                 T 350 ${liquidTopY}
                 L 350 400 L -100 400 Z`;
-              const waveSpeedSec = !isMachineStoppedVisual && agit_read > 0 
-                ? Math.max(0.6, 5 - (agit_read / 100)) 
+              const waveSpeedSec = !isMachineStoppedVisual && agit_read > 0
+                ? Math.max(0.6, 5 - (agit_read / 100))
                 : 8;
               return (
                 <g clipPath="url(#liquid-clip)">
@@ -448,11 +449,11 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             })()}
 
             {/* Rising Bubbles (Simulated Gas Sparger) */}
-            {air_read > 0 && level_read > 20 && (
+            {air_read > 0 && level_read > (0.2 * maxVolumeLiters) && (
               <g>
                 {[...Array(airBubbleCount)].map((_, i) => {
                   const rx = 80 + (i * 13) % 140;
-                  const ry = 340 - (i * 17) % (Math.max(20, (level_read / 100) * 210));
+                  const ry = 340 - (i * 17) % (Math.max(20, (level_read / maxVolumeLiters) * 210));
                   const rRadius = 1.5 + (i % 3);
                   return (
                     <circle
@@ -532,13 +533,13 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             <path d="M 230 65 L 180 65 L 180 115" fill="none" stroke={air_read > 0 ? "#065f46" : "#9ca3af"} strokeWidth="6" strokeLinecap="round" />
             {/* Gas Inlet Flow Line */}
             {air_read > 0 && (
-              <path 
-                d="M 230 65 L 180 65 L 180 115" 
-                fill="none" 
-                stroke="#10b981" 
-                strokeWidth="3.5" 
-                strokeLinecap="round" 
-                className="inlet-air-flow-line" 
+              <path
+                d="M 230 65 L 180 65 L 180 115"
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                className="inlet-air-flow-line"
               />
             )}
             {/* Gas Inlet Flow Arrow */}
@@ -556,13 +557,13 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             {/* Warning Liquid flowing out when warning is triggered */}
             {showAirOutWarning && (
               <>
-                <path 
-                  d="M 120 115 L 120 80 L 60 80" 
-                  fill="none" 
-                  stroke="#ff7c00" 
-                  strokeWidth="3.5" 
-                  strokeLinecap="round" 
-                  className="warning-liquid-flow-out" 
+                <path
+                  d="M 120 115 L 120 80 L 60 80"
+                  fill="none"
+                  stroke="#ff7c00"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                  className="warning-liquid-flow-out"
                 />
                 <g className="warning-splash-droplets">
                   <circle cx="55" cy="80" r="2" fill="#ff7c00" className="droplet-1" />
@@ -654,7 +655,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 <span className="gauge-value">{workingVolumeLiters.toFixed(1)} L</span>
               </div>
               <div className="gauge-track-bar">
-                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, level_read))}%` }}></div>
+                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (level_read / maxVolumeLiters) * 100))}%` }}></div>
               </div>
               <div className="gauge-limits">
                 <span>0 L</span>
@@ -1003,9 +1004,9 @@ function App() {
   const [isEditingAbout, setIsEditingAbout] = useState(false);
 
   const maxVol = aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
-  const calcVolumeLiters = (percentVal) => {
-    if (percentVal === undefined || percentVal === null || typeof percentVal !== 'number') return 0;
-    return parseFloat(((percentVal / 100) * maxVol).toFixed(1));
+  const calcVolumeLiters = (val) => {
+    if (val === undefined || val === null || typeof val !== 'number') return 0;
+    return parseFloat(val.toFixed(1));
   };
 
   // PWA Install Prompt State
@@ -1424,7 +1425,7 @@ function App() {
 
   useEffect(() => {
     fetchDB(true);
-    
+
     // Fetch public settings / about info
     fetch('/api/settings')
       .then(res => {
@@ -1469,10 +1470,10 @@ function App() {
   useEffect(() => {
     if (hasFetchedDB && userRole === 'customer' && activeCustomerJobId) {
       const activeJob = jobs.find(j => j.id === activeCustomerJobId);
-      
+
       let shouldLogout = false;
       let reason = '';
-      
+
       if (!activeJob) {
         shouldLogout = true;
         reason = 'ไม่พบข้อมูลของรอบรันนี้ในระบบ หรือข้อมูลอาจถูกลบไปแล้ว';
@@ -1483,7 +1484,7 @@ function App() {
         shouldLogout = true;
         reason = `รอบรัน "${activeJob.name || activeCustomerJobId}" ได้เสร็จสิ้นหรือถูกระงับการใช้งานแล้ว`;
       }
-      
+
       if (shouldLogout) {
         setSessionExpiredMessage(reason + ' กรุณาติดต่อเจ้าหน้าที่เพื่อขอลิงก์ใหม่');
         setUserRole(null);
@@ -1564,8 +1565,8 @@ function App() {
     agit_set: row.agit_set !== undefined ? row.agit_set : row.agit,
     air_read: row.air_read !== undefined ? row.air_read : row.air,
     air_set: row.air_set !== undefined ? row.air_set : row.air,
-    level_set: row.level_set !== undefined && row.level_set !== null ? calcVolumeLiters(row.level_set) : calcVolumeLiters(65.0),
-    level_read: row.level_read !== undefined && row.level_read !== null ? calcVolumeLiters(row.level_read) : calcVolumeLiters(65.0),
+    level_set: row.level_set !== undefined && row.level_set !== null ? calcVolumeLiters(row.level_set) : calcVolumeLiters(0.65 * maxVol),
+    level_read: row.level_read !== undefined && row.level_read !== null ? calcVolumeLiters(row.level_read) : calcVolumeLiters(0.65 * maxVol),
     air_out_set: row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((row.air_set !== undefined ? row.air_set : row.air || 0) * 0.96).toFixed(2)),
     air_out_read: row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((row.air_read !== undefined ? row.air_read : row.air || 0) * 0.96).toFixed(2)),
     heat_set: row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
@@ -1753,8 +1754,8 @@ function App() {
         agit_read: lastDataPoint.agit_read,
         air_set: lastDataPoint.air_set,
         air_read: lastDataPoint.air_read,
-        level_set: lastDataPoint.level_set !== undefined && lastDataPoint.level_set !== null ? lastDataPoint.level_set : 65.0,
-        level_read: lastDataPoint.level_read !== undefined && lastDataPoint.level_read !== null ? lastDataPoint.level_read : 65.0,
+        level_set: lastDataPoint.level_set !== undefined && lastDataPoint.level_set !== null ? lastDataPoint.level_set : (0.65 * maxVol),
+        level_read: lastDataPoint.level_read !== undefined && lastDataPoint.level_read !== null ? lastDataPoint.level_read : (0.65 * maxVol),
         air_out_set: lastDataPoint.air_out_set !== undefined && lastDataPoint.air_out_set !== null ? lastDataPoint.air_out_set : parseFloat(((lastDataPoint.air_set || 0) * 0.96).toFixed(2)),
         air_out_read: lastDataPoint.air_out_read !== undefined && lastDataPoint.air_out_read !== null ? lastDataPoint.air_out_read : parseFloat(((lastDataPoint.air_read || 0) * 0.96).toFixed(2)),
         heat_set: lastDataPoint.heat_set !== undefined && lastDataPoint.heat_set !== null ? lastDataPoint.heat_set : 0,
@@ -1775,8 +1776,8 @@ function App() {
         agit_read: 200,
         air_set: 2.0,
         air_read: 2.0,
-        level_set: 65.0,
-        level_read: 65.0,
+        level_set: (0.65 * maxVol),
+        level_read: (0.65 * maxVol),
         air_out_set: 1.9,
         air_out_read: 1.9,
         heat_set: 0,
@@ -2106,8 +2107,8 @@ function App() {
       agit_read: row.agit_read !== undefined ? row.agit_read : 0,
       air_set: row.air_set !== undefined ? row.air_set : 0,
       air_read: row.air_read !== undefined ? row.air_read : 0,
-      level_set: row.level_set !== undefined ? row.level_set : 65.0,
-      level_read: row.level_read !== undefined ? row.level_read : 65.0,
+      level_set: row.level_set !== undefined ? row.level_set : (0.65 * maxVol),
+      level_read: row.level_read !== undefined ? row.level_read : (0.65 * maxVol),
       air_out_set: row.air_out_set !== undefined ? row.air_out_set : parseFloat(((row.air_set || 0) * 0.96).toFixed(2)),
       air_out_read: row.air_out_read !== undefined ? row.air_out_read : parseFloat(((row.air_read || 0) * 0.96).toFixed(2)),
       heat_set: row.heat_set !== undefined ? row.heat_set : 0,
@@ -2276,7 +2277,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `customer_satisfaction_feedbacks_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `customer_satisfaction_feedbacks_${new Date().toISOString().slice(0, 10)}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -2518,8 +2519,8 @@ function App() {
       const ag_r = row.agit_read !== undefined ? row.agit_read : row.agit;
       const ai_s = row.air_set !== undefined ? row.air_set : row.air;
       const ai_r = row.air_read !== undefined ? row.air_read : row.air;
-      const lv_s = row.level_set !== undefined && row.level_set !== null ? row.level_set : 65.0;
-      const lv_r = row.level_read !== undefined && row.level_read !== null ? row.level_read : 65.0;
+      const lv_s = row.level_set !== undefined && row.level_set !== null ? row.level_set : (0.65 * maxVol);
+      const lv_r = row.level_read !== undefined && row.level_read !== null ? row.level_read : (0.65 * maxVol);
       const ao_s = row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((ai_s || 0) * 0.96).toFixed(2));
       const ao_r = row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((ai_r || 0) * 0.96).toFixed(2));
       const ht_s = row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0;
@@ -2596,8 +2597,8 @@ function App() {
         'Agit PV (RPM)': row.agit_read !== undefined ? row.agit_read : row.agit,
         'Air Flow SV (L/M)': ai_s,
         'Air Flow PV (L/M)': ai_r,
-        'Volume SV (L)': row.level_set !== undefined && row.level_set !== null ? calcVolumeLiters(row.level_set) : calcVolumeLiters(65.0),
-        'Volume PV (L)': row.level_read !== undefined && row.level_read !== null ? calcVolumeLiters(row.level_read) : calcVolumeLiters(65.0),
+        'Volume SV (L)': row.level_set !== undefined && row.level_set !== null ? calcVolumeLiters(row.level_set) : calcVolumeLiters(0.65 * maxVol),
+        'Volume PV (L)': row.level_read !== undefined && row.level_read !== null ? calcVolumeLiters(row.level_read) : calcVolumeLiters(0.65 * maxVol),
         'Air Out SV (L/M)': row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((ai_s || 0) * 0.96).toFixed(2)),
         'Air Out PV (L/M)': row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((ai_r || 0) * 0.96).toFixed(2)),
         'Heat SV (%)': row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
@@ -4140,7 +4141,7 @@ function App() {
                 <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-green)' }}>
                   ⚙️ เกี่ยวกับผู้พัฒนา & ระบบ (About System)
                 </h3>
-                
+
                 {!isEditingAbout ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', color: 'var(--text-primary)' }}>
                     <div style={{ paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -4164,11 +4165,11 @@ function App() {
                       <span style={{ fontSize: '0.85rem' }}>📧 {aboutSystem.supportEmail}</span>
                       <span style={{ fontSize: '0.85rem' }}>📞 {aboutSystem.supportPhone}</span>
                     </div>
-                    
+
                     {userRole === 'admin' && (
-                      <button 
-                        onClick={() => setIsEditingAbout(true)} 
-                        className="btn btn-secondary" 
+                      <button
+                        onClick={() => setIsEditingAbout(true)}
+                        className="btn btn-secondary"
                         style={{ width: '100%', margin: 0, marginTop: '1rem' }}
                       >
                         ✏️ แก้ไขข้อมูลผู้พัฒนา & ระบบ
@@ -4184,14 +4185,14 @@ function App() {
                     const techStack = e.target.techStack.value;
                     const supportEmail = e.target.supportEmail.value;
                     const supportPhone = e.target.supportPhone.value;
-                    
+
                     const password = prompt('กรุณาป้อนรหัสผ่านแอดมิน เพื่อยืนยันการบันทึกการเปลี่ยนแปลง:');
                     if (password === null) return; // User cancelled
                     if (!password.trim()) {
                       alert('จำเป็นต้องระบุรหัสผ่านแอดมินเพื่อดำเนินการ');
                       return;
                     }
-                    
+
                     try {
                       const res = await fetch('/api/settings/update-about', {
                         method: 'POST',
@@ -4219,85 +4220,85 @@ function App() {
                       alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
                     }
                   }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    
+
                     <div className="form-group" style={{ width: '100%' }}>
                       <label style={{ fontSize: '0.78rem' }}>ชื่อระบบ (System Name)</label>
-                      <input 
-                        type="text" 
-                        name="systemName" 
+                      <input
+                        type="text"
+                        name="systemName"
                         defaultValue={aboutSystem.systemName}
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group" style={{ width: '100%' }}>
                       <label style={{ fontSize: '0.78rem' }}>เวอร์ชันปัจจุบัน (System Version)</label>
-                      <input 
-                        type="text" 
-                        name="systemVersion" 
+                      <input
+                        type="text"
+                        name="systemVersion"
                         defaultValue={aboutSystem.systemVersion}
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group" style={{ width: '100%' }}>
                       <label style={{ fontSize: '0.78rem' }}>ผู้พัฒนาระบบ (Developer Team)</label>
-                      <input 
-                        type="text" 
-                        name="developer" 
+                      <input
+                        type="text"
+                        name="developer"
                         defaultValue={aboutSystem.developer}
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group" style={{ width: '100%' }}>
                       <label style={{ fontSize: '0.78rem' }}>เทคโนโลยีหลัก (Core Tech)</label>
-                      <input 
-                        type="text" 
-                        name="techStack" 
+                      <input
+                        type="text"
+                        name="techStack"
                         defaultValue={aboutSystem.techStack}
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group" style={{ width: '100%' }}>
                       <label style={{ fontSize: '0.78rem' }}>อีเมลสนับสนุน (Support Email)</label>
-                      <input 
-                        type="email" 
-                        name="supportEmail" 
+                      <input
+                        type="email"
+                        name="supportEmail"
                         defaultValue={aboutSystem.supportEmail}
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group" style={{ width: '100%' }}>
                       <label style={{ fontSize: '0.78rem' }}>เบอร์โทรศัพท์ (Support Phone)</label>
-                      <input 
-                        type="text" 
-                        name="supportPhone" 
+                      <input
+                        type="text"
+                        name="supportPhone"
                         defaultValue={aboutSystem.supportPhone}
                         style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
                         required
                       />
                     </div>
-                    
+
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <button 
-                        type="button" 
-                        onClick={() => setIsEditingAbout(false)} 
-                        className="btn btn-secondary" 
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingAbout(false)}
+                        className="btn btn-secondary"
                         style={{ flex: 1, margin: 0 }}
                       >
                         ยกเลิก
                       </button>
-                      <button 
-                        type="submit" 
-                        className="btn btn-blue" 
+                      <button
+                        type="submit"
+                        className="btn btn-blue"
                         style={{ flex: 1, margin: 0 }}
                       >
                         💾 บันทึกข้อมูล
@@ -4312,21 +4313,21 @@ function App() {
                 <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-blue)' }}>
                   💨 ตั้งค่าการคำนวณ VVM (VVM Calculation)
                 </h3>
-                
+
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   const vvmCalcType = e.target.vvmCalcType.value;
                   const maxVolumeLiters = e.target.maxVolumeLiters ? e.target.maxVolumeLiters.value : aboutSystem.maxVolumeLiters;
                   const constantVolumeLiters = e.target.constantVolumeLiters ? e.target.constantVolumeLiters.value : aboutSystem.constantVolumeLiters;
                   const airUnit = e.target.airUnit.value;
-                  
+
                   const password = prompt('กรุณาป้อนรหัสผ่านแอดมิน เพื่อยืนยันการตั้งค่า VVM:');
                   if (password === null) return;
                   if (!password.trim()) {
                     alert('จำเป็นต้องระบุรหัสผ่านแอดมินเพื่อดำเนินการ');
                     return;
                   }
-                  
+
                   try {
                     const res = await fetch('/api/settings/update-vvm', {
                       method: 'POST',
@@ -4351,10 +4352,10 @@ function App() {
                     alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
                   }
                 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  
+
                   <div className="form-group" style={{ width: '100%' }}>
                     <label>หน่วยของอัตราไหลลมในฐานข้อมูล (Air Flow Input Unit)</label>
-                    <select 
+                    <select
                       name="airUnit"
                       value={aboutSystem.airUnit || 'mlmin'}
                       onChange={(e) => {
@@ -4369,10 +4370,10 @@ function App() {
                       หากเลือก mL/min ระบบจะหาร 1000 ให้อัตโนมัติเพื่อใช้เป็นลิตร/นาทีในสูตรคำนวณ VVM
                     </span>
                   </div>
-                  
+
                   <div className="form-group" style={{ width: '100%' }}>
                     <label>วิธีการคำนวณปริมาตรน้ำหมัก (Fermentation Volume Method)</label>
-                    <select 
+                    <select
                       name="vvmCalcType"
                       value={aboutSystem.vvmCalcType || 'dynamic'}
                       onChange={(e) => {
@@ -4384,13 +4385,13 @@ function App() {
                       <option value="constant">คิดเป็นค่าคงที่ (Constant Volume)</option>
                     </select>
                   </div>
-                  
+
                   {(aboutSystem.vvmCalcType || 'dynamic') === 'dynamic' ? (
                     <div className="form-group" style={{ width: '100%' }}>
                       <label>ปริมาตรของน้ำหมักสูงสุดที่ระดับ 100% (ลิตร)</label>
-                      <input 
-                        type="number" 
-                        name="maxVolumeLiters" 
+                      <input
+                        type="number"
+                        name="maxVolumeLiters"
                         step="0.1"
                         min="0.1"
                         defaultValue={aboutSystem.maxVolumeLiters || 5.0}
@@ -4404,9 +4405,9 @@ function App() {
                   ) : (
                     <div className="form-group" style={{ width: '100%' }}>
                       <label>ปริมาตรน้ำหมักคงที่ (Constant Volume in Liters)</label>
-                      <input 
-                        type="number" 
-                        name="constantVolumeLiters" 
+                      <input
+                        type="number"
+                        name="constantVolumeLiters"
                         step="0.1"
                         min="0.1"
                         defaultValue={aboutSystem.constantVolumeLiters || 3.5}
@@ -4418,7 +4419,7 @@ function App() {
                       </span>
                     </div>
                   )}
-                  
+
                   {userRole === 'admin' && (
                     <button type="submit" className="btn btn-primary" style={{ width: '100%', margin: 0, marginTop: '0.5rem' }}>
                       💾 บันทึกการตั้งค่า VVM
@@ -4433,7 +4434,7 @@ function App() {
           <div className="feedbacks-view">
             <header className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
               <h2 style={{ margin: 0 }}>แบบประเมินความพึงพอใจลูกค้า (Customer Satisfaction Survey)</h2>
-              <button 
+              <button
                 onClick={handleExportFeedback}
                 className="btn btn-primary"
                 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -4767,34 +4768,34 @@ function App() {
                       <div className="form-inputs-row">
                         <div className="form-input-subgroup">
                           <span className="input-sublabel">ตั้งค่า (SV)</span>
-                          <input 
-                            type="number" 
-                            step="0.1" 
-                            name="level_set" 
-                            value={((formData.level_set || 0) / 100 * maxVol).toFixed(1)} 
+                          <input
+                            type="number"
+                            step="0.1"
+                            name="level_set"
+                            value={formData.level_set !== undefined && formData.level_set !== null ? formData.level_set : ''}
                             onChange={(e) => {
                               const lit = parseFloat(e.target.value) || 0;
-                              setFormData(prev => ({ ...prev, level_set: (lit / maxVol) * 100 }));
-                            }} 
-                            onFocus={handleInputFocus} 
-                            onBlur={handleInputBlur} 
-                            disabled={currentJob?.status === 'finished'} 
+                              setFormData(prev => ({ ...prev, level_set: lit }));
+                            }}
+                            onFocus={handleInputFocus}
+                            onBlur={handleInputBlur}
+                            disabled={currentJob?.status === 'finished'}
                           />
                         </div>
                         <div className="form-input-subgroup">
                           <span className="input-sublabel">อ่านค่า (PV)</span>
-                          <input 
-                            type="number" 
-                            step="0.1" 
-                            name="level_read" 
-                            value={((formData.level_read || 0) / 100 * maxVol).toFixed(1)} 
+                          <input
+                            type="number"
+                            step="0.1"
+                            name="level_read"
+                            value={formData.level_read !== undefined && formData.level_read !== null ? formData.level_read : ''}
                             onChange={(e) => {
                               const lit = parseFloat(e.target.value) || 0;
-                              setFormData(prev => ({ ...prev, level_read: (lit / maxVol) * 100 }));
-                            }} 
-                            onFocus={handleInputFocus} 
-                            onBlur={handleInputBlur} 
-                            disabled={currentJob?.status === 'finished'} 
+                              setFormData(prev => ({ ...prev, level_read: lit }));
+                            }}
+                            onFocus={handleInputFocus}
+                            onBlur={handleInputBlur}
+                            disabled={currentJob?.status === 'finished'}
                           />
                         </div>
                       </div>
@@ -5057,8 +5058,8 @@ function App() {
                         key={p.key}
                         onClick={() => setVisibleParameters(prev => ({ ...prev, [p.key]: !prev[p.key] }))}
                         style={{
-                          background: active 
-                            ? (theme === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'rgba(255,255,255,0.08)') 
+                          background: active
+                            ? (theme === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'rgba(255,255,255,0.08)')
                             : 'transparent',
                           borderColor: active ? p.color : 'var(--border-color)',
                           color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -5779,18 +5780,18 @@ function App() {
                                     <input
                                       type="number"
                                       step="0.1"
-                                      value={((editingRowData.level_set || 0) / 100 * maxVol).toFixed(1)}
-                                      onChange={(e) => handleEditChange('level_set', (parseFloat(e.target.value) || 0) / maxVol * 100)}
-                                      style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '45px', textAlign: 'center' }}
+                                      value={editingRowData.level_set !== undefined && editingRowData.level_set !== null ? editingRowData.level_set : ''}
+                                      onChange={(e) => handleEditChange('level_set', parseFloat(e.target.value) || 0)}
+                                      style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '55px', textAlign: 'center' }}
                                     />
                                   </td>
                                   <td style={{ textAlign: 'center', padding: '6px' }}>
                                     <input
                                       type="number"
                                       step="0.1"
-                                      value={((editingRowData.level_read || 0) / 100 * maxVol).toFixed(1)}
-                                      onChange={(e) => handleEditChange('level_read', (parseFloat(e.target.value) || 0) / maxVol * 100)}
-                                      style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '45px', textAlign: 'center', fontWeight: 600 }}
+                                      value={editingRowData.level_read !== undefined && editingRowData.level_read !== null ? editingRowData.level_read : ''}
+                                      onChange={(e) => handleEditChange('level_read', parseFloat(e.target.value) || 0)}
+                                      style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '55px', textAlign: 'center', fontWeight: 600 }}
                                     />
                                   </td>
                                 </>
