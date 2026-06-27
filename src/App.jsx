@@ -463,17 +463,42 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             {/* Sparger Ring at bottom (Static) */}
             <line x1="100" y1="340" x2="200" y2="340" stroke="#4b5563" strokeWidth="3" strokeDasharray="3,3" />
 
-            {/* Agitator Blades (Impeller) at bottom */}
+            {/* Agitator Blades (Impellers) - 3 Sets on Shaft */}
             {agit_read > 0 ? (
               <g style={agitSpinStyle}>
-                {/* Impeller Hub */}
+                {/* 1. TOP IMPELLER: Foam Cutter (ใบตัดฟอง) */}
+                <rect x="140" y="132" width="20" height="16" rx="2" fill="#111827" />
+                <path d="M 105 136 L 140 137 L 140 143 L 105 144 Z" fill="#4b5563" stroke="#1f2937" strokeWidth="1" />
+                <path d="M 195 136 L 160 137 L 160 143 L 195 144 Z" fill="#4b5563" stroke="#1f2937" strokeWidth="1" />
+                {/* Antifoam vertical tooth elements at the end of blades */}
+                <rect x="104" y="130" width="3" height="18" fill="#ffb800" />
+                <rect x="193" y="130" width="3" height="18" fill="#ffb800" />
+
+                {/* 2. MIDDLE IMPELLER: Mixing (ใบกวนผสม) */}
+                <rect x="135" y="212" width="30" height="15" rx="3" fill="#111827" />
+                <path d="M 100 214 L 135 217 L 135 222 L 100 225 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
+                <path d="M 200 214 L 165 217 L 165 222 L 200 225 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
+
+                {/* 3. BOTTOM IMPELLER: Gas Dispersion (ใบกวนล่างสุด) */}
                 <rect x="135" y="300" width="30" height="15" rx="3" fill="#111827" />
-                {/* Left/Right Turbine Blades */}
                 <path d="M 100 302 L 135 305 L 135 310 L 100 313 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
                 <path d="M 200 302 L 165 305 L 165 310 L 200 313 Z" fill="#374151" stroke="#1f2937" strokeWidth="1" />
               </g>
             ) : (
               <g>
+                {/* 1. TOP IMPELLER: Foam Cutter (ใบตัดฟอง) */}
+                <rect x="140" y="132" width="20" height="16" rx="2" fill="#374151" />
+                <path d="M 105 136 L 140 137 L 140 143 L 105 144 Z" fill="#4b5563" />
+                <path d="M 195 136 L 160 137 L 160 143 L 195 144 Z" fill="#4b5563" />
+                <rect x="104" y="130" width="3" height="18" fill="#d97706" />
+                <rect x="193" y="130" width="3" height="18" fill="#d97706" />
+
+                {/* 2. MIDDLE IMPELLER: Mixing (ใบกวนผสม) */}
+                <rect x="135" y="212" width="30" height="15" rx="3" fill="#374151" />
+                <path d="M 100 214 L 135 217 L 135 222 L 100 225 Z" fill="#4b5563" />
+                <path d="M 200 214 L 165 217 L 165 222 L 200 225 Z" fill="#4b5563" />
+
+                {/* 3. BOTTOM IMPELLER: Gas Dispersion (ใบกวนล่างสุด) */}
                 <rect x="135" y="300" width="30" height="15" rx="3" fill="#374151" />
                 <path d="M 100 302 L 135 305 L 135 310 L 100 313 Z" fill="#4b5563" />
                 <path d="M 200 302 L 165 305 L 165 310 L 200 313 Z" fill="#4b5563" />
