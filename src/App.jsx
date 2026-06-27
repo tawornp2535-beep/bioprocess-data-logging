@@ -174,8 +174,13 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   const isAirHigh = (air_read > 500 || air_set > 500);
   const showAirOutWarning = isRpm250 && isAirHigh;
 
-  // VVM calculation: (Air Flow slpm) / (Working Liquid/Fermentation Volume in Liters)
+  // VVM calculation: (Air Flow in L/min) / (Working Liquid/Fermentation Volume in Liters)
   const vvmCalcType = aboutSystem?.vvmCalcType || 'dynamic';
+  const airUnit = aboutSystem?.airUnit || 'mlmin';
+  
+  // Convert air_read to L/min if it is in mL/min
+  const airLitersPerMinute = airUnit === 'mlmin' ? (air_read / 1000) : air_read;
+  
   let workingVolumeLiters = 5.0;
   if (vvmCalcType === 'constant') {
     workingVolumeLiters = aboutSystem?.constantVolumeLiters !== undefined ? Number(aboutSystem.constantVolumeLiters) : 3.5;
@@ -184,7 +189,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
     workingVolumeLiters = level_read > 0 ? (level_read / 100) * maxVolumeLiters : maxVolumeLiters;
   }
   if (workingVolumeLiters <= 0) workingVolumeLiters = 5.0; // protection against zero/negative division
-  const calculatedVvm = (air_read / workingVolumeLiters).toFixed(2);
+  const calculatedVvm = (airLitersPerMinute / workingVolumeLiters).toFixed(2);
 
   // Deriving timestamp formatting
   const pad2 = (n) => String(n).padStart(2, '0');
@@ -612,7 +617,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             <div className="display-screen green-lcd" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '2px', minWidth: '75px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span className="screen-val" style={{ color: 'var(--accent-green)', textShadow: '0 0 5px rgba(16,185,129,0.8)' }}>{air_read.toFixed(1)}</span>
-                <span className="screen-unit">slpm</span>
+                <span className="screen-unit">{airUnit === 'mlmin' ? 'mL/min' : 'slpm'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid rgba(16,185,129,0.2)', paddingTop: '2px' }}>
                 <span className="screen-val" style={{ color: 'var(--accent-green)', textShadow: '0 0 5px rgba(16,185,129,0.8)' }}>{calculatedVvm}</span>
@@ -680,7 +685,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
               <div className="gauge-label-row">
                 <span className="gauge-icon">🟢</span>
                 <span className="gauge-title">AIR FLOW IN</span>
-                <span className="gauge-value">{air_read.toFixed(1)} slpm / {calculatedVvm} vvm</span>
+                <span className="gauge-value">{air_read.toFixed(1)} {airUnit === 'mlmin' ? 'mL/min' : 'slpm'} / {calculatedVvm} vvm</span>
               </div>
               <div className="gauge-track-bar">
                 <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (air_read / 1000) * 100))}%` }}></div>
@@ -992,7 +997,8 @@ function App() {
     supportPhone: '+66 2 123 4567',
     vvmCalcType: 'dynamic',
     maxVolumeLiters: 5.0,
-    constantVolumeLiters: 3.5
+    constantVolumeLiters: 3.5,
+    airUnit: 'mlmin'
   });
   const [isEditingAbout, setIsEditingAbout] = useState(false);
 
@@ -1430,7 +1436,8 @@ function App() {
             supportPhone: data.supportPhone || '+66 2 123 4567',
             vvmCalcType: data.vvmCalcType || 'dynamic',
             maxVolumeLiters: data.maxVolumeLiters !== undefined ? data.maxVolumeLiters : 5.0,
-            constantVolumeLiters: data.constantVolumeLiters !== undefined ? data.constantVolumeLiters : 3.5
+            constantVolumeLiters: data.constantVolumeLiters !== undefined ? data.constantVolumeLiters : 3.5,
+            airUnit: data.airUnit || 'mlmin'
           });
         }
       })
@@ -4305,6 +4312,7 @@ function App() {
                   const vvmCalcType = e.target.vvmCalcType.value;
                   const maxVolumeLiters = e.target.maxVolumeLiters ? e.target.maxVolumeLiters.value : aboutSystem.maxVolumeLiters;
                   const constantVolumeLiters = e.target.constantVolumeLiters ? e.target.constantVolumeLiters.value : aboutSystem.constantVolumeLiters;
+                  const airUnit = e.target.airUnit.value;
                   
                   const password = prompt('กรุณาป้อนรหัสผ่านแอดมิน เพื่อยืนยันการตั้งค่า VVM:');
                   if (password === null) return;
@@ -4321,7 +4329,8 @@ function App() {
                         password,
                         vvmCalcType,
                         maxVolumeLiters,
-                        constantVolumeLiters
+                        constantVolumeLiters,
+                        airUnit
                       })
                     });
                     const result = await res.json();
@@ -4336,6 +4345,24 @@ function App() {
                     alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
                   }
                 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  
+                  <div className="form-group" style={{ width: '100%' }}>
+                    <label>หน่วยของอัตราไหลลมในฐานข้อมูล (Air Flow Input Unit)</label>
+                    <select 
+                      name="airUnit"
+                      value={aboutSystem.airUnit || 'mlmin'}
+                      onChange={(e) => {
+                        setAboutSystem(prev => ({ ...prev, airUnit: e.target.value }));
+                      }}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
+                    >
+                      <option value="mlmin">mL/min (มิลลิลิตร/นาที) - เช่น ป้อน 400 = 0.4 ลิตร/นาที</option>
+                      <option value="lmin">L/min หรือ SLPM (ลิตร/นาที) - เช่น ป้อน 4.0 = 4.0 ลิตร/นาที</option>
+                    </select>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      หากเลือก mL/min ระบบจะหาร 1000 ให้อัตโนมัติเพื่อใช้เป็นลิตร/นาทีในสูตรคำนวณ VVM
+                    </span>
+                  </div>
                   
                   <div className="form-group" style={{ width: '100%' }}>
                     <label>วิธีการคำนวณปริมาตรน้ำหมัก (Fermentation Volume Method)</label>

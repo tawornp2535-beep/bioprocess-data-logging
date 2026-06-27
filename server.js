@@ -356,7 +356,8 @@ const getSettings = async () => {
     supportPhone: '+66 2 123 4567',
     vvmCalcType: 'dynamic',
     maxVolumeLiters: 5.0,
-    constantVolumeLiters: 3.5
+    constantVolumeLiters: 3.5,
+    airUnit: 'mlmin'
   };
   
   let needsWrite = false;
@@ -561,7 +562,7 @@ app.post('/api/settings/update-about', async (req, res) => {
 });
 
 app.post('/api/settings/update-vvm', async (req, res) => {
-  const { password, vvmCalcType, maxVolumeLiters, constantVolumeLiters } = req.body;
+  const { password, vvmCalcType, maxVolumeLiters, constantVolumeLiters, airUnit } = req.body;
   const settings = await getSettings();
   if (password !== settings.adminPassword) {
     return res.status(400).json({ error: 'รหัสผ่านแอดมินยืนยันไม่ถูกต้อง' });
@@ -570,6 +571,7 @@ app.post('/api/settings/update-vvm', async (req, res) => {
   settings.vvmCalcType = vvmCalcType || 'dynamic';
   settings.maxVolumeLiters = parseFloat(maxVolumeLiters) || 5.0;
   settings.constantVolumeLiters = parseFloat(constantVolumeLiters) || 3.5;
+  settings.airUnit = airUnit || 'mlmin';
 
   await saveSettings(settings);
   
