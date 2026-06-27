@@ -140,7 +140,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // BSTR Diagram Component
-const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory }) => {
+const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory, theme }) => {
   if (!dataPoint) {
     return (
       <div className="glass-panel empty-state" style={{ height: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -357,6 +357,13 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
               <clipPath id="liquid-clip">
                 <path d="M 74 350 L 74 125 L 226 125 L 226 350 A 76 46 0 0 1 74 350 Z" />
               </clipPath>
+              <filter id="liquid-glow" x="-10%" y="-10%" width="120%" height="120%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
 
             {/* Heating Jacket Glow (Wrapper behind reactor) */}
@@ -409,6 +416,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                     stroke="#d97706"
                     strokeWidth="1"
                     className="liquid-wave-animated"
+                    filter={theme === 'hmi' ? 'url(#liquid-glow)' : 'none'}
                     style={{
                       animationDuration: `${waveSpeedSec}s`
                     }}
@@ -4537,6 +4545,7 @@ function App() {
                   onToggleStatus={() => handleToggleJobStatus(currentJob?.id, currentJob?.status || 'running')}
                   userRole={userRole}
                   isViewingHistory={isViewingHistory}
+                  theme={theme}
                 />
               ) : activeTab === 'dashboard' ? (
                 <>
