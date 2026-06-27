@@ -181,11 +181,11 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   // Convert air_read to L/min if it is in mL/min
   const airLitersPerMinute = airUnit === 'mlmin' ? (air_read / 1000) : air_read;
   
+  const maxVolumeLiters = aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
   let workingVolumeLiters = 5.0;
   if (vvmCalcType === 'constant') {
     workingVolumeLiters = aboutSystem?.constantVolumeLiters !== undefined ? Number(aboutSystem.constantVolumeLiters) : 3.5;
   } else {
-    const maxVolumeLiters = aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
     workingVolumeLiters = level_read > 0 ? (level_read / 100) * maxVolumeLiters : maxVolumeLiters;
   }
   if (workingVolumeLiters <= 0) workingVolumeLiters = 5.0; // protection against zero/negative division
