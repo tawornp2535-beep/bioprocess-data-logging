@@ -140,7 +140,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // BSTR Diagram Component
-const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory, theme, aboutSystem }) => {
+const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory, theme, aboutSystem, machineName }) => {
   if (!dataPoint) {
     return (
       <div className="glass-panel empty-state" style={{ height: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -281,7 +281,9 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
       <div className="diagram-header-bar">
         <div className="diagram-title-section">
           <h2>BATCH STIRRED TANK REACTOR (BSTR)</h2>
-          <p className="diagram-subtitle">PROCESS MONITORING DIAGRAM</p>
+          <p className="diagram-subtitle">
+            {machineName ? machineName : 'PROCESS MONITORING DIAGRAM'}
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {userRole === 'admin' && !isReplaying && jobStatus !== 'finished' && (
@@ -5194,6 +5196,7 @@ function App() {
                   isViewingHistory={isViewingHistory}
                   theme={theme}
                   aboutSystem={aboutSystem}
+                  machineName={currentMachine?.name || ''}
                 />
               ) : activeTab === 'dashboard' ? (
                 <>
