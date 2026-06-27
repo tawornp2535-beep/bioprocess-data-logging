@@ -525,6 +525,25 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
               <path d="M 65 80 L 75 75 L 75 85 Z" fill="#ffffff" className="flow-arrow-animation-left" />
             )}
 
+            {/* Warning Liquid flowing out when warning is triggered */}
+            {showAirOutWarning && (
+              <>
+                <path 
+                  d="M 120 115 L 120 80 L 60 80" 
+                  fill="none" 
+                  stroke="#ff7c00" 
+                  strokeWidth="3.5" 
+                  strokeLinecap="round" 
+                  className="warning-liquid-flow-out" 
+                />
+                <g className="warning-splash-droplets">
+                  <circle cx="55" cy="80" r="2" fill="#ff7c00" className="droplet-1" />
+                  <circle cx="50" cy="81" r="1.5" fill="#ff7c00" className="droplet-2" />
+                  <circle cx="45" cy="79" r="2.5" fill="#ff7c00" className="droplet-3" />
+                </g>
+              </>
+            )}
+
             {/* Warning Sign near Air Outlet Pipe */}
             {showAirOutWarning && (
               <g className="svg-warning-pulse" transform="translate(68, 48)">

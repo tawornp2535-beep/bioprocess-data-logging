@@ -2379,3 +2379,42 @@ body {
 .air-outlet-warning-flashing {
   animation: air-outlet-warning-flashing-anim 1.2s infinite ease-in-out !important;
 }
+
+/* Orange water/liquid flowing out of Air Outlet pipe during warning */
+@keyframes warning-liquid-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.warning-liquid-flow-out {
+  stroke-dasharray: 6, 4;
+  animation: warning-liquid-flow 0.8s infinite linear;
+  filter: drop-shadow(0 0 4px #ff7c00);
+}
+
+@keyframes droplet-out-1 {
+  0% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(-15px, 3px); opacity: 0; }
+}
+@keyframes droplet-out-2 {
+  0% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(-25px, -2px); opacity: 0; }
+}
+@keyframes droplet-out-3 {
+  0% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(-20px, 1px); opacity: 0; }
+}
+.warning-splash-droplets .droplet-1 {
+  transform-origin: 55px 80px;
+  animation: droplet-out-1 0.6s infinite linear;
+}
+.warning-splash-droplets .droplet-2 {
+  transform-origin: 50px 81px;
+  animation: droplet-out-2 0.8s infinite linear;
+  animation-delay: 0.2s;
+}
+.warning-splash-droplets .droplet-3 {
+  transform-origin: 45px 79px;
+  animation: droplet-out-3 0.7s infinite linear;
+  animation-delay: 0.4s;
+}
