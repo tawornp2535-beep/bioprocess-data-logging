@@ -346,14 +346,17 @@ const getSettings = async () => {
     localDB.settings = { adminPassword: 'admin123' };
   }
   
-  // Ensure default developer info is present
+  // Ensure default developer info and VVM config are present
   const defaultAbout = {
     systemName: 'DBMS (Bioprocess Data Logging)',
     systemVersion: 'v2.4.0 (SCADA Polish)',
     developer: 'ทีมวิศวกรรมข้อมูลชีวภาพ (Bioprocess Engineering Team)',
     techStack: 'React / Vite / Node.js / GCS',
     supportEmail: 'support@bioprocess-logging.local',
-    supportPhone: '+66 2 123 4567'
+    supportPhone: '+66 2 123 4567',
+    vvmCalcType: 'dynamic',
+    maxVolumeLiters: 5.0,
+    constantVolumeLiters: 3.5
   };
   
   let needsWrite = false;
@@ -550,6 +553,23 @@ app.post('/api/settings/update-about', async (req, res) => {
   settings.techStack = (techStack || '').trim();
   settings.supportEmail = (supportEmail || '').trim();
   settings.supportPhone = (supportPhone || '').trim();
+
+  await saveSettings(settings);
+  
+  const { adminPassword: _, ...publicSettings } = settings;
+  res.json({ success: true, settings: publicSettings });
+});
+
+app.post('/api/settings/update-vvm', async (req, res) => {
+  const { password, vvmCalcType, maxVolumeLiters, constantVolumeLiters } = req.body;
+  const settings = await getSettings();
+  if (password !== settings.adminPassword) {
+    return res.status(400).json({ error: 'รหัสผ่านแอดมินยืนยันไม่ถูกต้อง' });
+  }
+
+  settings.vvmCalcType = vvmCalcType || 'dynamic';
+  settings.maxVolumeLiters = parseFloat(maxVolumeLiters) || 5.0;
+  settings.constantVolumeLiters = parseFloat(constantVolumeLiters) || 3.5;
 
   await saveSettings(settings);
   

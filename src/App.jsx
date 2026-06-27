@@ -140,7 +140,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // BSTR Diagram Component
-const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory, theme }) => {
+const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jobStatus = 'running', onToggleStatus, userRole, isViewingHistory, theme, aboutSystem }) => {
   if (!dataPoint) {
     return (
       <div className="glass-panel empty-state" style={{ height: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -174,12 +174,16 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   const isAirHigh = (air_read > 500 || air_set > 500);
   const showAirOutWarning = isRpm250 && isAirHigh;
 
-  // VVM calculation: (Air Flow slpm) / (Working Liquid Volume in Liters)
-  // Assuming a standard total vessel working capacity of 5.0 Liters.
-  // Working Volume = (level_read / 100) * totalVolumeCapacity.
-  // If level_read is not available/zero, we default to full 5.0L capacity to prevent division by zero.
-  const totalVolumeCapacity = 5.0;
-  const workingVolumeLiters = level_read > 0 ? (level_read / 100) * totalVolumeCapacity : totalVolumeCapacity;
+  // VVM calculation: (Air Flow slpm) / (Working Liquid/Fermentation Volume in Liters)
+  const vvmCalcType = aboutSystem?.vvmCalcType || 'dynamic';
+  let workingVolumeLiters = 5.0;
+  if (vvmCalcType === 'constant') {
+    workingVolumeLiters = aboutSystem?.constantVolumeLiters !== undefined ? Number(aboutSystem.constantVolumeLiters) : 3.5;
+  } else {
+    const maxVolumeLiters = aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
+    workingVolumeLiters = level_read > 0 ? (level_read / 100) * maxVolumeLiters : maxVolumeLiters;
+  }
+  if (workingVolumeLiters <= 0) workingVolumeLiters = 5.0; // protection against zero/negative division
   const calculatedVvm = (air_read / workingVolumeLiters).toFixed(2);
 
   // Deriving timestamp formatting
@@ -985,7 +989,10 @@ function App() {
     developer: 'ทีมวิศวกรรมข้อมูลชีวภาพ (Bioprocess Engineering Team)',
     techStack: 'React / Vite / Node.js / GCS',
     supportEmail: 'support@bioprocess-logging.local',
-    supportPhone: '+66 2 123 4567'
+    supportPhone: '+66 2 123 4567',
+    vvmCalcType: 'dynamic',
+    maxVolumeLiters: 5.0,
+    constantVolumeLiters: 3.5
   });
   const [isEditingAbout, setIsEditingAbout] = useState(false);
 
@@ -1420,7 +1427,10 @@ function App() {
             developer: data.developer || 'ทีมวิศวกรรมข้อมูลชีวภาพ (Bioprocess Engineering Team)',
             techStack: data.techStack || 'React / Vite / Node.js / GCS',
             supportEmail: data.supportEmail || 'support@bioprocess-logging.local',
-            supportPhone: data.supportPhone || '+66 2 123 4567'
+            supportPhone: data.supportPhone || '+66 2 123 4567',
+            vvmCalcType: data.vvmCalcType || 'dynamic',
+            maxVolumeLiters: data.maxVolumeLiters !== undefined ? data.maxVolumeLiters : 5.0,
+            constantVolumeLiters: data.constantVolumeLiters !== undefined ? data.constantVolumeLiters : 3.5
           });
         }
       })
@@ -4283,6 +4293,106 @@ function App() {
                   </form>
                 )}
               </div>
+
+              {/* VVM Calculation Settings Panel */}
+              <div className="glass-panel" style={{ padding: '2rem' }}>
+                <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-blue)' }}>
+                  💨 ตั้งค่าการคำนวณ VVM (VVM Calculation)
+                </h3>
+                
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const vvmCalcType = e.target.vvmCalcType.value;
+                  const maxVolumeLiters = e.target.maxVolumeLiters ? e.target.maxVolumeLiters.value : aboutSystem.maxVolumeLiters;
+                  const constantVolumeLiters = e.target.constantVolumeLiters ? e.target.constantVolumeLiters.value : aboutSystem.constantVolumeLiters;
+                  
+                  const password = prompt('กรุณาป้อนรหัสผ่านแอดมิน เพื่อยืนยันการตั้งค่า VVM:');
+                  if (password === null) return;
+                  if (!password.trim()) {
+                    alert('จำเป็นต้องระบุรหัสผ่านแอดมินเพื่อดำเนินการ');
+                    return;
+                  }
+                  
+                  try {
+                    const res = await fetch('/api/settings/update-vvm', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        password,
+                        vvmCalcType,
+                        maxVolumeLiters,
+                        constantVolumeLiters
+                      })
+                    });
+                    const result = await res.json();
+                    if (res.ok) {
+                      alert('บันทึกการตั้งค่า VVM สำเร็จเรียบร้อยแล้ว');
+                      setAboutSystem(result.settings);
+                    } else {
+                      alert(`ผิดพลาด: ${result.error}`);
+                    }
+                  } catch (err) {
+                    console.error('Error saving VVM settings:', err);
+                    alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
+                  }
+                }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  
+                  <div className="form-group" style={{ width: '100%' }}>
+                    <label>วิธีการคำนวณปริมาตรน้ำหมัก (Fermentation Volume Method)</label>
+                    <select 
+                      name="vvmCalcType"
+                      value={aboutSystem.vvmCalcType || 'dynamic'}
+                      onChange={(e) => {
+                        setAboutSystem(prev => ({ ...prev, vvmCalcType: e.target.value }));
+                      }}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
+                    >
+                      <option value="dynamic">คำนวณตามระดับน้ำจริงในถัง (Dynamic Level %)</option>
+                      <option value="constant">คิดเป็นค่าคงที่ (Constant Volume)</option>
+                    </select>
+                  </div>
+                  
+                  {(aboutSystem.vvmCalcType || 'dynamic') === 'dynamic' ? (
+                    <div className="form-group" style={{ width: '100%' }}>
+                      <label>ปริมาตรของน้ำหมักสูงสุดที่ระดับ 100% (ลิตร)</label>
+                      <input 
+                        type="number" 
+                        name="maxVolumeLiters" 
+                        step="0.1"
+                        min="0.1"
+                        defaultValue={aboutSystem.maxVolumeLiters || 5.0}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
+                        required
+                      />
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        สูตร: SLPM ÷ ((Level % ÷ 100) × ปริมาตรสูงสุด)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="form-group" style={{ width: '100%' }}>
+                      <label>ปริมาตรน้ำหมักคงที่ (Constant Volume in Liters)</label>
+                      <input 
+                        type="number" 
+                        name="constantVolumeLiters" 
+                        step="0.1"
+                        min="0.1"
+                        defaultValue={aboutSystem.constantVolumeLiters || 3.5}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }}
+                        required
+                      />
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        สูตร: SLPM ÷ ปริมาตรน้ำหมักคงที่
+                      </span>
+                    </div>
+                  )}
+                  
+                  {userRole === 'admin' && (
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%', margin: 0, marginTop: '0.5rem' }}>
+                      💾 บันทึกการตั้งค่า VVM
+                    </button>
+                  )}
+                </form>
+              </div>
             </div>
           </div>
         ) : currentAppView === 'feedbacks' ? (
@@ -4942,6 +5052,7 @@ function App() {
                   userRole={userRole}
                   isViewingHistory={isViewingHistory}
                   theme={theme}
+                  aboutSystem={aboutSystem}
                 />
               ) : activeTab === 'dashboard' ? (
                 <>
