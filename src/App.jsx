@@ -2202,6 +2202,8 @@ function App() {
   };
 
   const handleInputFocus = (e) => {
+    // Select all text on focus so user can immediately type a new value
+    e.target.select();
     const { name, value } = e.target;
     if (value === '0' || parseFloat(value) === 0) {
       setFormData(prev => ({
@@ -4776,13 +4778,13 @@ function App() {
                             type="number"
                             step="0.1"
                             name="level_set"
-                            value={formData.level_set !== undefined && formData.level_set !== null ? formData.level_set : ''}
+                            value={formData.level_set !== undefined && formData.level_set !== null && formData.level_set !== 0 ? formData.level_set : (formData.level_set === 0 ? 0 : '')}
                             onChange={(e) => {
-                              const lit = parseFloat(e.target.value) || 0;
+                              const lit = e.target.value === '' ? '' : parseFloat(e.target.value);
                               setFormData(prev => ({ ...prev, level_set: lit }));
                             }}
-                            onFocus={handleInputFocus}
-                            onBlur={handleInputBlur}
+                            onFocus={(e) => { e.target.select(); if (!e.target.value || parseFloat(e.target.value) === 0) setFormData(prev => ({ ...prev, level_set: '' })); }}
+                            onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) setFormData(prev => ({ ...prev, level_set: 0 })); }}
                             disabled={currentJob?.status === 'finished'}
                           />
                         </div>
@@ -4792,13 +4794,13 @@ function App() {
                             type="number"
                             step="0.1"
                             name="level_read"
-                            value={formData.level_read !== undefined && formData.level_read !== null ? formData.level_read : ''}
+                            value={formData.level_read !== undefined && formData.level_read !== null && formData.level_read !== 0 ? formData.level_read : (formData.level_read === 0 ? 0 : '')}
                             onChange={(e) => {
-                              const lit = parseFloat(e.target.value) || 0;
+                              const lit = e.target.value === '' ? '' : parseFloat(e.target.value);
                               setFormData(prev => ({ ...prev, level_read: lit }));
                             }}
-                            onFocus={handleInputFocus}
-                            onBlur={handleInputBlur}
+                            onFocus={(e) => { e.target.select(); if (!e.target.value || parseFloat(e.target.value) === 0) setFormData(prev => ({ ...prev, level_read: '' })); }}
+                            onBlur={(e) => { if (e.target.value === '' || isNaN(parseFloat(e.target.value))) setFormData(prev => ({ ...prev, level_read: 0 })); }}
                             disabled={currentJob?.status === 'finished'}
                           />
                         </div>
