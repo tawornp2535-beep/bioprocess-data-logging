@@ -4955,7 +4955,7 @@ function App() {
                             min="0"
                             max={maxVol}
                             name="level_set"
-                            value={formData.level_set !== undefined && formData.level_set !== null && formData.level_set !== 0 ? parseFloat(((formData.level_set / 100) * maxVol).toFixed(1)) : (formData.level_set === 0 ? 0 : '')}
+                            value={typeof formData.level_set === 'number' && !isNaN(formData.level_set) ? parseFloat(((formData.level_set / 100) * maxVol).toFixed(1)) : (formData.level_set === 0 ? 0 : '')}
                             onChange={(e) => {
                               const lit = e.target.value === '' ? '' : parseFloat(e.target.value);
                               setFormData(prev => ({ ...prev, level_set: lit === '' ? '' : (lit / maxVol) * 100 }));
@@ -4978,7 +4978,7 @@ function App() {
                             min="0"
                             max={maxVol}
                             name="level_read"
-                            value={formData.level_read !== undefined && formData.level_read !== null && formData.level_read !== 0 ? parseFloat(((formData.level_read / 100) * maxVol).toFixed(1)) : (formData.level_read === 0 ? 0 : '')}
+                            value={typeof formData.level_read === 'number' && !isNaN(formData.level_read) ? parseFloat(((formData.level_read / 100) * maxVol).toFixed(1)) : (formData.level_read === 0 ? 0 : '')}
                             onChange={(e) => {
                               const lit = e.target.value === '' ? '' : parseFloat(e.target.value);
                               setFormData(prev => ({ ...prev, level_read: lit === '' ? '' : (lit / maxVol) * 100 }));
