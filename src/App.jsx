@@ -958,7 +958,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
         <div className="sparkline-card">
           <span className="sparkline-title">VOLUME (L)</span>
           <div className="sparkline-chart-area">
-            {renderSparkline(chartData, 'level_read', '#10b981', 0, maxVol)}
+            {renderSparkline(chartData, 'level_read', '#10b981', 0, physicalMaxVolume)}
           </div>
           <div className="sparkline-axis-labels">
             <span>{startLabel}</span>
