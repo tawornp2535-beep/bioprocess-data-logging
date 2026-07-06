@@ -818,12 +818,12 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 <span className="gauge-value">{workingVolumeLiters.toFixed(1)} L</span>
               </div>
               <div className="gauge-track-bar">
-                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (level_read / maxVolumeLiters) * 100))}%` }}></div>
+                <div className="gauge-filled-bar green-bar" style={{ width: `${Math.min(100, Math.max(0, (level_read / physicalMaxVolume) * 100))}%` }}></div>
               </div>
               <div className="gauge-limits">
                 <span>0 L</span>
-                <span>{(maxVolumeLiters / 2).toFixed(1)} L</span>
-                <span>{maxVolumeLiters.toFixed(1)} L</span>
+                <span>{(physicalMaxVolume / 2).toFixed(1)} L</span>
+                <span>{physicalMaxVolume.toFixed(1)} L</span>
               </div>
             </div>
 
@@ -958,7 +958,7 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
         <div className="sparkline-card">
           <span className="sparkline-title">VOLUME (L)</span>
           <div className="sparkline-chart-area">
-            {renderSparkline(chartData, 'level_read', '#10b981', 0, maxVolumeLiters)}
+            {renderSparkline(chartData, 'level_read', '#10b981', 0, maxVol)}
           </div>
           <div className="sparkline-axis-labels">
             <span>{startLabel}</span>
@@ -1688,6 +1688,16 @@ function App() {
   const jobsForMachine = jobs.filter(j => j.machineId === currentMachineId);
   const currentMachine = machines.find(m => m.id === currentMachineId);
 
+  const getDynamicMaxVolForMachine = (mId) => {
+    const machine = machines.find(m => m.id === mId);
+    if (!machine) return aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
+    const name = machine.name.toLowerCase();
+    if (name.includes('750') || name.includes('500')) return 750.0;
+    if (name.includes('70')) return 70.0;
+    if (name.includes('10')) return 10.0;
+    return aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
+  };
+
   const getDynamicMaxVol = () => {
     if (!currentMachine) return aboutSystem?.maxVolumeLiters !== undefined ? Number(aboutSystem.maxVolumeLiters) : 5.0;
     const name = currentMachine.name.toLowerCase();
@@ -1701,6 +1711,42 @@ function App() {
     if (percentVal === undefined || percentVal === null || typeof percentVal !== 'number') return 0;
     return parseFloat(((percentVal / 100) * maxVol).toFixed(1));
   };
+
+  const mapDataPointsToLiters = (dataPoints, job) => {
+    if (!job) return [];
+    const jobMaxVol = getDynamicMaxVolForMachine(job.machineId);
+    const calcVol = (percentVal) => {
+      if (percentVal === undefined || percentVal === null || typeof percentVal !== 'number') return 0;
+      return parseFloat(((percentVal / 100) * jobMaxVol).toFixed(1));
+    };
+    return dataPoints.map((row, idx) => {
+      const airSetVal = row.air_set !== undefined ? row.air_set : row.air;
+      const airReadVal = row.air_read !== undefined ? row.air_read : row.air;
+      return {
+        ...row,
+        originalIndex: idx,
+        cultureHour: getElapsedHours(job, row.timestamp),
+        temp_read: row.temp_read !== undefined ? row.temp_read : row.temp,
+        temp_set: row.temp_set !== undefined ? row.temp_set : row.temp,
+        ph_read: row.ph_read !== undefined ? row.ph_read : row.ph,
+        ph_set: row.ph_set !== undefined ? row.ph_set : row.ph,
+        do_read: row.do_read !== undefined ? row.do_read : row.do,
+        do_set: row.do_set !== undefined ? row.do_set : row.do,
+        agit_read: row.agit_read !== undefined ? row.agit_read : row.agit,
+        agit_set: row.agit_set !== undefined ? row.agit_set : row.agit,
+        air_read: airReadVal,
+        air_set: airSetVal,
+        level_set: row.level_set !== undefined && row.level_set !== null ? calcVol(row.level_set) : calcVol(65.0),
+        level_read: row.level_read !== undefined && row.level_read !== null ? calcVol(row.level_read) : calcVol(65.0),
+        air_out_set: row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((airSetVal || 0) * 0.96).toFixed(2)),
+        air_out_read: row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((airReadVal || 0) * 0.96).toFixed(2)),
+        heat_set: row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
+        heat_read: row.heat_read !== undefined && row.heat_read !== null ? row.heat_read : 0.0,
+        remark: row.remark !== undefined ? row.remark : ''
+      };
+    });
+  };
+
   const currentJob = jobs.find(j => j.id === currentJobId) || jobsForMachine[0];
   const currentJobData = currentJob?.data || [];
 
@@ -1721,28 +1767,7 @@ function App() {
     return currentJobData;
   }, [isReplay, sortedFullData, replayIndex, currentJobData]);
 
-  const chartData = displayData.map((row, idx) => ({
-    ...row,
-    originalIndex: idx,
-    cultureHour: getElapsedHours(currentJob, row.timestamp),
-    temp_read: row.temp_read !== undefined ? row.temp_read : row.temp,
-    temp_set: row.temp_set !== undefined ? row.temp_set : row.temp,
-    ph_read: row.ph_read !== undefined ? row.ph_read : row.ph,
-    ph_set: row.ph_set !== undefined ? row.ph_set : row.ph,
-    do_read: row.do_read !== undefined ? row.do_read : row.do,
-    do_set: row.do_set !== undefined ? row.do_set : row.do,
-    agit_read: row.agit_read !== undefined ? row.agit_read : row.agit,
-    agit_set: row.agit_set !== undefined ? row.agit_set : row.agit,
-    air_read: row.air_read !== undefined ? row.air_read : row.air,
-    air_set: row.air_set !== undefined ? row.air_set : row.air,
-    level_set: row.level_set !== undefined && row.level_set !== null ? calcVolumeLiters(row.level_set) : calcVolumeLiters(65.0),
-    level_read: row.level_read !== undefined && row.level_read !== null ? calcVolumeLiters(row.level_read) : calcVolumeLiters(65.0),
-    air_out_set: row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((row.air_set !== undefined ? row.air_set : row.air || 0) * 0.96).toFixed(2)),
-    air_out_read: row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((row.air_read !== undefined ? row.air_read : row.air || 0) * 0.96).toFixed(2)),
-    heat_set: row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
-    heat_read: row.heat_read !== undefined && row.heat_read !== null ? row.heat_read : 0.0,
-    remark: row.remark !== undefined ? row.remark : ''
-  })).sort((a, b) => {
+  const chartData = mapDataPointsToLiters(displayData, currentJob).sort((a, b) => {
     const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
     const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
     return aTime - bTime;
@@ -2337,6 +2362,8 @@ function App() {
 
       const payload = {
         ...editingRowData,
+        level_set: typeof editingRowData.level_set === 'number' && !isNaN(editingRowData.level_set) ? (editingRowData.level_set / maxVol) * 100 : null,
+        level_read: typeof editingRowData.level_read === 'number' && !isNaN(editingRowData.level_read) ? (editingRowData.level_read / maxVol) * 100 : null,
         timestamp
       };
 
@@ -2691,7 +2718,8 @@ function App() {
     ];
     const csvRows = [headers.join(',')];
     const isCurrent = job.id === currentJob?.id;
-    const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
+    const mappedRows = mapDataPointsToLiters(job.data, job);
+    const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : mappedRows;
     rowsToExport.forEach(row => {
       const dateVal = row.timestamp ? toYYYYMMDD(row.timestamp) : (row.date || '');
       const timeVal = row.timestamp ? toHHMM(row.timestamp) : (row.time || '');
@@ -2706,8 +2734,8 @@ function App() {
       const ag_r = row.agit_read !== undefined ? row.agit_read : row.agit;
       const ai_s = row.air_set !== undefined ? row.air_set : row.air;
       const ai_r = row.air_read !== undefined ? row.air_read : row.air;
-      const lv_s = row.level_set !== undefined && row.level_set !== null ? row.level_set : 65.0;
-      const lv_r = row.level_read !== undefined && row.level_read !== null ? row.level_read : 65.0;
+      const lv_s = row.level_set !== undefined && row.level_set !== null ? (typeof row.level_set === 'number' ? row.level_set.toFixed(1) : row.level_set) : '-';
+      const lv_r = row.level_read !== undefined && row.level_read !== null ? (typeof row.level_read === 'number' ? row.level_read.toFixed(1) : row.level_read) : '-';
       const ao_s = row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((ai_s || 0) * 0.96).toFixed(2));
       const ao_r = row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((ai_r || 0) * 0.96).toFixed(2));
       const ht_s = row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0;
@@ -2765,7 +2793,8 @@ function App() {
     }
 
     const isCurrent = job.id === currentJob?.id;
-    const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : job.data;
+    const mappedRows = mapDataPointsToLiters(job.data, job);
+    const rowsToExport = isCurrent && getSortedRows().length > 0 ? getSortedRows() : mappedRows;
 
     const sheetData = rowsToExport.map(row => {
       const ai_s = row.air_set !== undefined ? row.air_set : row.air;
@@ -2784,8 +2813,8 @@ function App() {
         'Agit PV (RPM)': row.agit_read !== undefined ? row.agit_read : row.agit,
         'Air Flow SV (L/M)': ai_s,
         'Air Flow PV (L/M)': ai_r,
-        'Volume SV (L)': row.level_set !== undefined && row.level_set !== null ? calcVolumeLiters(row.level_set) : calcVolumeLiters(65.0),
-        'Volume PV (L)': row.level_read !== undefined && row.level_read !== null ? calcVolumeLiters(row.level_read) : calcVolumeLiters(65.0),
+        'Volume SV (L)': row.level_set !== undefined && row.level_set !== null ? (typeof row.level_set === 'number' ? parseFloat(row.level_set.toFixed(1)) : row.level_set) : '-',
+        'Volume PV (L)': row.level_read !== undefined && row.level_read !== null ? (typeof row.level_read === 'number' ? parseFloat(row.level_read.toFixed(1)) : row.level_read) : '-',
         'Air Out SV (L/M)': row.air_out_set !== undefined && row.air_out_set !== null ? row.air_out_set : parseFloat(((ai_s || 0) * 0.96).toFixed(2)),
         'Air Out PV (L/M)': row.air_out_read !== undefined && row.air_out_read !== null ? row.air_out_read : parseFloat(((ai_r || 0) * 0.96).toFixed(2)),
         'Heat SV (%)': row.heat_set !== undefined && row.heat_set !== null ? row.heat_set : 0.0,
@@ -5987,8 +6016,8 @@ function App() {
                                     <input
                                       type="number"
                                       step="0.1"
-                                      value={editingRowData.level_set !== undefined && editingRowData.level_set !== null ? parseFloat(((editingRowData.level_set / 100) * maxVol).toFixed(1)) : ''}
-                                      onChange={(e) => handleEditChange('level_set', (parseFloat(e.target.value) || 0) / maxVol * 100)}
+                                      value={typeof editingRowData.level_set === 'number' && !isNaN(editingRowData.level_set) ? parseFloat(editingRowData.level_set.toFixed(1)) : (editingRowData.level_set === 0 ? 0 : '')}
+                                      onChange={(e) => handleEditChange('level_set', e.target.value === '' ? '' : parseFloat(e.target.value))}
                                       style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '55px', textAlign: 'center' }}
                                     />
                                   </td>
@@ -5996,8 +6025,8 @@ function App() {
                                     <input
                                       type="number"
                                       step="0.1"
-                                      value={editingRowData.level_read !== undefined && editingRowData.level_read !== null ? parseFloat(((editingRowData.level_read / 100) * maxVol).toFixed(1)) : ''}
-                                      onChange={(e) => handleEditChange('level_read', (parseFloat(e.target.value) || 0) / maxVol * 100)}
+                                      value={typeof editingRowData.level_read === 'number' && !isNaN(editingRowData.level_read) ? parseFloat(editingRowData.level_read.toFixed(1)) : (editingRowData.level_read === 0 ? 0 : '')}
+                                      onChange={(e) => handleEditChange('level_read', e.target.value === '' ? '' : parseFloat(e.target.value))}
                                       style={{ padding: '6px 2px', borderRadius: '4px', border: '1px solid var(--accent-green)', background: 'var(--bg-color)', color: 'var(--text-primary)', fontSize: '0.85rem', width: '55px', textAlign: 'center', fontWeight: 600 }}
                                     />
                                   </td>
@@ -6115,8 +6144,8 @@ function App() {
                               )}
                               {visibleParameters.level && (
                                 <>
-                                  <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.level_set === 'number' ? calcVolumeLiters(row.level_set) : '-'}</td>
-                                  <td style={{ textAlign: 'center', color: 'var(--accent-green)', fontWeight: 600 }}>{typeof row.level_read === 'number' ? calcVolumeLiters(row.level_read) : '-'}</td>
+                                  <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{typeof row.level_set === 'number' ? row.level_set.toFixed(1) : '-'}</td>
+                                  <td style={{ textAlign: 'center', color: 'var(--accent-green)', fontWeight: 600 }}>{typeof row.level_read === 'number' ? row.level_read.toFixed(1) : '-'}</td>
                                 </>
                               )}
                               {visibleParameters.air_out && (
