@@ -1010,7 +1010,10 @@ app.post('/api/upload', async (req, res) => {
         console.log(`✅ Uploaded image to Firebase Storage: ${publicUrl}`);
         return res.json({ url: publicUrl });
       } catch (err) {
-        console.error('❌ Failed to upload to Firebase Storage, falling back to local storage:', err.message);
+        console.error('❌ Failed to upload to Firebase Storage, falling back to persistent database storage:', err.message);
+        // Fallback: return base64 data directly so it gets saved in Firestore persistently
+        // to prevent image loss on Render's ephemeral local disk.
+        return res.json({ url: base64Data });
       }
     }
 
