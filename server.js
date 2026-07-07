@@ -603,7 +603,6 @@ app.get('/api/settings', async (req, res) => {
 
 app.get('/api/storage-info', async (req, res) => {
   const cloudStorageFreeLimit = 5 * 1024 * 1024 * 1024; // 5 GB
-  const firestoreFreeLimit = 1 * 1024 * 1024 * 1024; // 1 GiB
   let usedBytes = 0;
 
   let dbData;
@@ -620,6 +619,17 @@ app.get('/api/storage-info', async (req, res) => {
     dbData.jobs.forEach(job => {
       if (job.data && Array.isArray(job.data)) {
         dataPointsCount += job.data.length;
+      }
+    });
+  }
+
+  // Calculate size in bytes
+  let machineImagesSize = 0;
+  if (dbData.machines && Array.isArray(dbData.machines)) {
+    dbData.machines.forEach(m => {
+      if (m.imageData && typeof m.imageData === 'string') {
+        // Approximate bytes for base64
+        machineImagesSize += Math.round(m.imageData.length * 0.75);
       }
     });
   }
@@ -668,6 +678,11 @@ app.get('/api/storage-info', async (req, res) => {
     }
   }
 
+  // Estimate DB sizes
+  const machinesDbSize = machinesCount * 500;
+  const jobsDbSize = jobsCount * 1000;
+  const dataPointsDbSize = dataPointsCount * 400;
+
   return res.json({
     isCloud,
     isStorageCloud,
@@ -677,14 +692,39 @@ app.get('/api/storage-info', async (req, res) => {
       plan: isCloud ? 'Blaze Plan (Pay as you go)' : 'Local Disk',
       rateInfo: '$0.026 per GB after free 5 GB'
     },
-    firestore: {
-      freeLimitBytes: firestoreFreeLimit,
-      plan: isCloud ? 'Blaze Plan (Pay as you go)' : 'Local JSON DB',
-      rateInfo: '$0.18 per GiB after free 1 GiB',
-      machinesCount,
-      jobsCount,
-      dataPointsCount
-    }
+    totalUsed: usedBytes + machineImagesSize + machinesDbSize + jobsDbSize + dataPointsDbSize,
+    categories: [
+      {
+        name: 'รูปภาพแนบในตารางประวัติ (Attached Images)',
+        size: usedBytes,
+        description: 'รูปถ่ายกิจกรรมและรายงานอัปโหลดระหว่างประวัติระบบ',
+        icon: 'Camera'
+      },
+      {
+        name: 'รูปถังปฏิกรณ์ชีวภาพ (Machine Avatars)',
+        size: machineImagesSize,
+        description: 'รูปแทนประเภทถังหมักและคอนฟิกเครื่องจักร',
+        icon: 'Cpu'
+      },
+      {
+        name: 'จุดข้อมูลบันทึก HMI (Data Logger Points)',
+        size: dataPointsDbSize,
+        description: 'ค่าพารามิเตอร์ Temp, pH, DO, RPM, AirFlow รายวินาที',
+        icon: 'Activity'
+      },
+      {
+        name: 'ข้อมูลเซสชันการรัน (Experimental Runs)',
+        size: jobsDbSize,
+        description: 'ประวัติเวลาการรันงานและบันทึกผู้ใช้',
+        icon: 'Folder'
+      },
+      {
+        name: 'ฐานข้อมูลตั้งค่าระบบ (Config Databases)',
+        size: machinesDbSize,
+        description: 'คอนฟิกตั้งค่าสเกล และระดับการตั้งสัญญาณเตือน',
+        icon: 'Settings'
+      }
+    ]
   });
 });
 
