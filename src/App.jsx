@@ -4573,6 +4573,7 @@ function App() {
                 { id: 'ai',       icon: '🤖', label: '3. ปัญญาประดิษฐ์ (Gemini AI)' },
                 { id: 'password', icon: '🔒', label: '4. รหัสผ่าน & แอดมิน' },
                 { id: 'about',    icon: 'ℹ️', label: '5. เกี่ยวกับระบบ' },
+                { id: 'cctv',     icon: '📹', label: '6. ตั้งค่ากล้อง CCTV' },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -4865,17 +4866,9 @@ function App() {
                         </div>
                       )}
 
-                      <div className="settings-form-group">
-                        <label>ที่อยู่กล้องวงจรปิด (CCTV Stream URL)</label>
-                        <input type="text" name="cctvUrl" placeholder="เช่น http://192.168.1.99:8080/video หรือลิงก์ EZVIZ Cloud"
-                          value={aboutSystem.cctvUrl !== undefined && aboutSystem.cctvUrl !== null ? aboutSystem.cctvUrl : ''}
-                          onChange={(e) => setAboutSystem(prev => ({ ...prev, cctvUrl: e.target.value }))} />
-                        <span className="settings-form-hint">ใส่ลิงก์สตรีมแบบ MJPEG (เช่นแอป IP Webcam) หรือลิงก์ iframe ของ EZVIZ เพื่อแสดงกล้องสด</span>
-                      </div>
-
                       {userRole === 'admin' && (
                         <button type="submit" className="btn btn-primary" style={{ width: '100%', margin: '0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                          💾 บันทึกการตั้งค่า VVM & CCTV
+                          💾 บันทึกการตั้งค่า VVM
                         </button>
                       )}
                     </form>
@@ -4998,6 +4991,74 @@ function App() {
                     <div className="settings-about-footer">
                       © {new Date().getFullYear()} {aboutSystem.developer}. All rights reserved.
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* === TAB 6: CCTV CAMERA CONFIG === */}
+              {settingsTab === 'cctv' && (
+                <div className="settings-panel-grid">
+                  <div className="glass-panel settings-card">
+                    <div className="settings-card-header">
+                      <span className="settings-card-icon" style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--accent-blue)' }}>📹</span>
+                      <div>
+                        <h3>ตั้งค่ากล้องวงจรปิด (CCTV Config)</h3>
+                        <p>จัดการที่อยู่ลิงก์กล้องวงจรปิดสำหรับสลับแสดงผลบนหน้าจอ Dashboard</p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const cctvUrl = e.target.cctvUrl.value;
+                      
+                      try {
+                        const res = await fetch('/api/settings/update-vvm', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ 
+                            vvmCalcType: aboutSystem.vvmCalcType,
+                            maxVolumeLiters: aboutSystem.maxVolumeLiters,
+                            constantVolumeLiters: aboutSystem.constantVolumeLiters,
+                            airUnit: aboutSystem.airUnit,
+                            cctvUrl 
+                          })
+                        });
+                        const result = await res.json();
+                        if (res.ok) {
+                          alert('บันทึกที่อยู่กล้อง CCTV สำเร็จ');
+                          setAboutSystem(result.settings);
+                        } else {
+                          alert(`ผิดพลาด: ${result.error}`);
+                        }
+                      } catch (err) {
+                        alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+                      }
+                    }} className="settings-form">
+                      <div className="settings-ai-info-card" style={{ borderLeftColor: 'var(--accent-blue)', background: 'rgba(59,130,246,0.05)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '1.3rem' }}>💡</span>
+                          <strong style={{ color: 'var(--accent-blue)' }}>คำแนะนำการใส่ที่อยู่กล้อง</strong>
+                        </div>
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+                          - **กล้อง EZVIZ Cloud**: ใส่ลิงก์แชร์ HLS / iframe ของคุณ (เช่น ลิงก์ที่มีคำว่า <code>ezvizlife.com</code>)<br/>
+                          - **กล้องผ่านแอปมือถือ (IP Webcam)**: ต่อ Wi-Fi วงเดียวกันแล้วใส่ลิงก์สตรีม (เช่น <code>http://192.168.1.99:8080/video</code>)
+                        </p>
+                      </div>
+
+                      <div className="settings-form-group" style={{ marginTop: '1rem' }}>
+                        <label>ที่อยู่ลิงก์สตรีมกล้อง (CCTV Stream URL)</label>
+                        <input type="text" name="cctvUrl" placeholder="เช่น http://192.168.1.99:8080/video หรือลิงก์ EZVIZ"
+                          value={aboutSystem.cctvUrl !== undefined && aboutSystem.cctvUrl !== null ? aboutSystem.cctvUrl : ''}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, cctvUrl: e.target.value }))} />
+                        <span className="settings-form-hint">ลิงก์นี้จะนำไปดึงสตรีมภาพสดในแท็บ Live Camera บนแดชบอร์ดหลัก</span>
+                      </div>
+
+                      {userRole === 'admin' && (
+                        <button type="submit" className="btn btn-primary" style={{ width: '100%', margin: '0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          💾 บันทึกการตั้งค่ากล้อง CCTV
+                        </button>
+                      )}
+                    </form>
                   </div>
                 </div>
               )}
