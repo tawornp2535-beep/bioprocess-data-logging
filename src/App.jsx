@@ -6255,7 +6255,7 @@ function App() {
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                           <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
-                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(2) : val} />
+                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(1) : val} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line type="monotone" dataKey="temp_read" name="TEMP PV (Read)" stroke="var(--accent-red)" strokeWidth={3} dot={true} activeDot={{ r: 8 }} />
@@ -6272,7 +6272,7 @@ function App() {
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                           <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
-                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <YAxis domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(1) : val} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line type="monotone" dataKey="ph_read" name="pH PV (Read)" stroke="var(--accent-blue)" strokeWidth={3} dot={true} activeDot={{ r: 8 }} />
@@ -6289,8 +6289,8 @@ function App() {
                         <LineChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                           <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
-                          <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
-                          <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                          <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(1) : val} />
+                          <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} tickFormatter={(val) => typeof val === 'number' ? val.toFixed(1) : val} />
                           <Tooltip content={<CustomTooltip />} />
                           <Legend wrapperStyle={{ fontSize: '12px' }} />
                           <Line yAxisId="left" type="monotone" dataKey="do_read" name="DO PV (%)" stroke="var(--accent-green)" strokeWidth={3} dot={true} />
