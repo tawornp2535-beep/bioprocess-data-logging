@@ -7820,6 +7820,7 @@ function App() {
 
       {/* Glassmorphic Feedback Modal — แบบประเมินความพึงพอใจ */}
       {showFeedbackModal && (() => {
+        const isMobile = windowWidth <= 768;
         const closeFeedbackModal = () => {
           setShowFeedbackModal(false);
           if (window._pendingLogout) {
@@ -7868,7 +7869,7 @@ function App() {
             >
               {/* Modal Header */}
               <div style={{
-                padding: '1.25rem 1.75rem',
+                padding: isMobile ? '1rem' : '1.25rem 1.75rem',
                 borderBottom: '1px solid var(--border-color)',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 background: 'linear-gradient(135deg, rgba(234,179,8,0.12), rgba(234,179,8,0.04))',
@@ -7889,7 +7890,7 @@ function App() {
               </div>
 
               {/* Modal Scrollable Body */}
-              <div style={{ overflowY: 'auto', flex: 1, padding: '1.5rem 1.75rem' }}>
+              <div style={{ overflowY: 'auto', flex: 1, padding: isMobile ? '1rem' : '1.5rem 1.75rem' }}>
                 {feedbackSuccess ? (
                   <div style={{ textAlign: 'center', padding: '2.5rem 0', color: 'var(--accent-green)' }}>
                     <div style={{ fontSize: '4rem', marginBottom: '12px' }}>✓</div>
@@ -7897,32 +7898,34 @@ function App() {
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>ระบบบันทึกแบบประเมินเรียบร้อยแล้ว</p>
                   </div>
                 ) : (
-                  <form onSubmit={submitFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+                  <form onSubmit={submitFeedback} style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '1.25rem' : '1.75rem' }}>
 
                     {/* Score Table Header */}
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 48px 48px 48px 48px 48px',
-                      gap: '4px',
-                      alignItems: 'center',
-                      padding: '8px 10px',
-                      background: 'rgba(234,179,8,0.06)',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(234,179,8,0.15)',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      color: 'var(--text-secondary)',
-                      letterSpacing: '0.03em'
-                    }}>
-                      <span>หัวข้อการประเมิน</span>
-                      {[5, 4, 3, 2, 1].map(s => (
-                        <span key={s} style={{ textAlign: 'center', color: scoreColors[s] }}>{s}<br /><span style={{ fontSize: '0.65rem', fontWeight: 400 }}>{shortScoreLabels[s]}</span></span>
-                      ))}
-                    </div>
+                    {!isMobile && (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 48px 48px 48px 48px 48px',
+                        gap: '4px',
+                        alignItems: 'center',
+                        padding: '8px 10px',
+                        background: 'rgba(234,179,8,0.06)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(234,179,8,0.15)',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        color: 'var(--text-secondary)',
+                        letterSpacing: '0.03em'
+                      }}>
+                        <span>หัวข้อการประเมิน</span>
+                        {[5, 4, 3, 2, 1].map(s => (
+                          <span key={s} style={{ textAlign: 'center', color: scoreColors[s] }}>{s}<br /><span style={{ fontSize: '0.65rem', fontWeight: 400 }}>{shortScoreLabels[s]}</span></span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Sections + Questions */}
                     {sections.map((sec, si) => (
-                      <div key={si} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div key={si} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {/* Section Header */}
                         <div style={{
                           fontSize: '0.78rem', fontWeight: 700,
@@ -7940,46 +7943,95 @@ function App() {
                         </div>
 
                         {/* Questions in this section */}
-                        {sec.questions.map((q, qi) => (
-                          <div key={q.id} style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 48px 48px 48px 48px 48px',
-                            gap: '4px',
-                            alignItems: 'center',
-                            padding: '8px 10px',
-                            borderRadius: '8px',
-                            background: qi % 2 === 0 ? (theme === 'light' ? 'rgba(15,23,42,0.02)' : 'rgba(255,255,255,0.02)') : 'transparent',
-                            transition: 'background 0.15s'
-                          }}>
-                            <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: 1.4, paddingRight: '8px' }}>
-                              {SURVEY_QUESTIONS.indexOf(q) + 1}. {q.text}
-                            </span>
-                            {[5, 4, 3, 2, 1].map(score => (
-                              <label key={score} style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
-                                <input
-                                  type="radio"
-                                  name={q.id}
-                                  value={score}
-                                  checked={feedbackScores[q.id] === score}
-                                  onChange={() => setFeedbackScores(prev => ({ ...prev, [q.id]: score }))}
-                                  style={{ display: 'none' }}
-                                />
-                                <span style={{
-                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                  width: '28px', height: '28px', borderRadius: '50%',
-                                  border: `2px solid ${feedbackScores[q.id] === score ? scoreColors[score] : (theme === 'light' ? 'rgba(15,23,42,0.15)' : 'rgba(255,255,255,0.15)')}`,
-                                  background: feedbackScores[q.id] === score ? scoreColors[score] + '33' : 'transparent',
-                                  fontSize: '0.75rem', fontWeight: 700,
-                                  color: feedbackScores[q.id] === score ? scoreColors[score] : (theme === 'light' ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.35)'),
-                                  transition: 'all 0.15s',
-                                  userSelect: 'none'
-                                }}>
-                                  {score}
+                        {sec.questions.map((q, qi) => {
+                          if (isMobile) {
+                            return (
+                              <div key={q.id} style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                padding: '12px',
+                                borderRadius: '10px',
+                                background: qi % 2 === 0 ? (theme === 'light' ? 'rgba(15,23,42,0.02)' : 'rgba(255,255,255,0.02)') : 'transparent',
+                                border: '1px solid var(--border-color)',
+                                boxSizing: 'border-box'
+                              }}>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)', lineHeight: 1.4, marginBottom: '10px', fontWeight: 600 }}>
+                                  {SURVEY_QUESTIONS.indexOf(q) + 1}. {q.text}
                                 </span>
-                              </label>
-                            ))}
-                          </div>
-                        ))}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+                                  {[5, 4, 3, 2, 1].map(score => (
+                                    <label key={score} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', flex: 1 }}>
+                                      <input
+                                        type="radio"
+                                        name={q.id}
+                                        value={score}
+                                        checked={feedbackScores[q.id] === score}
+                                        onChange={() => setFeedbackScores(prev => ({ ...prev, [q.id]: score }))}
+                                        style={{ display: 'none' }}
+                                      />
+                                      <span style={{
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        width: '32px', height: '32px', borderRadius: '50%',
+                                        border: `2px solid ${feedbackScores[q.id] === score ? scoreColors[score] : (theme === 'light' ? 'rgba(15,23,42,0.15)' : 'rgba(255,255,255,0.15)')}`,
+                                        background: feedbackScores[q.id] === score ? scoreColors[score] + '33' : 'transparent',
+                                        fontSize: '0.8rem', fontWeight: 700,
+                                        color: feedbackScores[q.id] === score ? scoreColors[score] : (theme === 'light' ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.35)'),
+                                        transition: 'all 0.15s',
+                                        userSelect: 'none'
+                                      }}>
+                                        {score}
+                                      </span>
+                                      <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', marginTop: '4px', textAlign: 'center' }}>
+                                        {shortScoreLabels[score]}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={q.id} style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 48px 48px 48px 48px 48px',
+                              gap: '4px',
+                              alignItems: 'center',
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              background: qi % 2 === 0 ? (theme === 'light' ? 'rgba(15,23,42,0.02)' : 'rgba(255,255,255,0.02)') : 'transparent',
+                              transition: 'background 0.15s'
+                            }}>
+                              <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: 1.4, paddingRight: '8px' }}>
+                                {SURVEY_QUESTIONS.indexOf(q) + 1}. {q.text}
+                              </span>
+                              {[5, 4, 3, 2, 1].map(score => (
+                                <label key={score} style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
+                                  <input
+                                    type="radio"
+                                    name={q.id}
+                                    value={score}
+                                    checked={feedbackScores[q.id] === score}
+                                    onChange={() => setFeedbackScores(prev => ({ ...prev, [q.id]: score }))}
+                                    style={{ display: 'none' }}
+                                  />
+                                  <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    width: '28px', height: '28px', borderRadius: '50%',
+                                    border: `2px solid ${feedbackScores[q.id] === score ? scoreColors[score] : (theme === 'light' ? 'rgba(15,23,42,0.15)' : 'rgba(255,255,255,0.15)')}`,
+                                    background: feedbackScores[q.id] === score ? scoreColors[score] + '33' : 'transparent',
+                                    fontSize: '0.75rem', fontWeight: 700,
+                                    color: feedbackScores[q.id] === score ? scoreColors[score] : (theme === 'light' ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.35)'),
+                                    transition: 'all 0.15s',
+                                    userSelect: 'none'
+                                  }}>
+                                    {score}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     ))}
 
