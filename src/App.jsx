@@ -3947,21 +3947,6 @@ function App() {
                 <span className="sidebar-badge">{jobs.length}</span>
               </div>
 
-              {/* Menu Presentation */}
-              <div
-                className={`sidebar-menu-item ${currentAppView === 'presentation' ? 'active' : ''}`}
-                onClick={() => {
-                  setCurrentAppView('presentation');
-                  setIsMobileMenuOpen(false);
-                }}
-                style={currentAppView === 'presentation' ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(79,70,229,0.2))', borderLeft: '3px solid #7c3aed' } : {}}
-              >
-                <span className="sidebar-menu-link" style={{ color: currentAppView === 'presentation' ? '#a78bfa' : undefined }}>
-                  <span style={{ fontSize: 16 }}>🖥️</span>
-                  Presentation Mode
-                </span>
-              </div>
-
               {/* Menu Instruments */}
               <div
                 className={`sidebar-menu-item ${currentAppView === 'instruments' ? 'active' : ''}`}
@@ -3975,6 +3960,24 @@ function App() {
                   เครื่องมือ (Instruments)
                 </span>
                 <span className="sidebar-badge">{machines.length}</span>
+              </div>
+
+              {/* Category: Presentation & Analysis */}
+              <div className="sidebar-menu-header">PRESENTATION & ANALYSIS</div>
+
+              {/* Menu Presentation */}
+              <div
+                className={`sidebar-menu-item ${currentAppView === 'presentation' ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentAppView('presentation');
+                  setIsMobileMenuOpen(false);
+                }}
+                style={currentAppView === 'presentation' ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(79,70,229,0.2))', borderLeft: '3px solid #7c3aed' } : {}}
+              >
+                <span className="sidebar-menu-link" style={{ color: currentAppView === 'presentation' ? '#a78bfa' : undefined }}>
+                  <span style={{ fontSize: 16 }}>🖥️</span>
+                  Presentation Mode
+                </span>
               </div>
 
               {/* Category: Management */}
