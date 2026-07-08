@@ -26,8 +26,23 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Keep track of recent requests in memory to check pings/uptime robots
+const recentRequests = [];
+
 // Request logging middleware
 app.use((req, res, next) => {
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  recentRequests.push({
+    time: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    userAgent,
+    ip: req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress
+  });
+  if (recentRequests.length > 40) {
+    recentRequests.shift();
+  }
+
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   if (req.body && Object.keys(req.body).length) {
     // Avoid logging large file uploads/image uploads if any
@@ -457,6 +472,16 @@ const saveSettings = async (settings) => {
 // Health check endpoint (used to keep server active via Uptime monitoring pings)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// Endpoint to check recent incoming pings/requests (useful for debugging UptimeRobot)
+app.get('/api/pings', (req, res) => {
+  res.json({
+    message: "Recent HTTP requests received by server",
+    uptimeRobotActive: recentRequests.some(r => r.userAgent.toLowerCase().includes('uptimerobot')),
+    totalLogged: recentRequests.length,
+    recentRequests
+  });
 });
 
 // In-memory active users tracker
