@@ -980,44 +980,48 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
             </div>
           )}
 
-          {/* Motor Drive RPM Display Box Overlaid on Vessel Head */}
-          <div className="motor-drive-display">
-            <span className="display-label">MOTOR RPM</span>
-            <div className="display-screen">
-              <span className="screen-val">{isMachineStoppedVisual ? 0 : Math.round(agit_read)}</span>
-              <span className="screen-unit">RPM</span>
-            </div>
-            <span className="display-sv">SV: {Math.round(agit_set)}</span>
-          </div>
-
-          {/* Gas Inlet Flow slpm Box Overlaid on Inlet Pipe */}
-          <div className="gas-inlet-display">
-            <span className="display-label">AIR FLOW IN</span>
-            <div className="display-screen green-lcd" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '2px', minWidth: '75px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span className="screen-val" style={{ color: 'var(--accent-green)', textShadow: '0 0 5px rgba(16,185,129,0.8)' }}>{airDisplayLpm.toFixed(2)}</span>
-                <span className="screen-unit">L/min</span>
+          {cctvMode === 'diagram' && (
+            <>
+              {/* Motor Drive RPM Display Box Overlaid on Vessel Head */}
+              <div className="motor-drive-display">
+                <span className="display-label">MOTOR RPM</span>
+                <div className="display-screen">
+                  <span className="screen-val">{isMachineStoppedVisual ? 0 : Math.round(agit_read)}</span>
+                  <span className="screen-unit">RPM</span>
+                </div>
+                <span className="display-sv">SV: {Math.round(agit_set)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid rgba(16,185,129,0.2)', paddingTop: '2px' }}>
-                <span className="screen-val" style={{ color: 'var(--accent-green)', textShadow: '0 0 5px rgba(16,185,129,0.8)' }}>{calculatedVvm}</span>
-                <span className="screen-unit">vvm</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Air Outlet Flow slpm Box Overlaid on Outlet Pipe */}
-          <div className={`air-outlet-display ${showAirOutWarning ? 'air-outlet-warning-flashing' : ''}`}>
-            <span className="display-label">AIR OUT (PMa)</span>
-            <div className="display-screen blue-lcd">
-              <span className="screen-val">{air_out_read.toFixed(1)}</span>
-              <span className="screen-unit">PMa</span>
-            </div>
-            {showAirOutWarning && (
-              <span style={{ fontSize: '0.6rem', color: '#ff3e3e', fontWeight: 'bold', marginTop: '2px', textAlign: 'center' }}>
-                ⚠️ ระวัง! RPM & AIR สูง
-              </span>
-            )}
-          </div>
+              {/* Gas Inlet Flow slpm Box Overlaid on Inlet Pipe */}
+              <div className="gas-inlet-display">
+                <span className="display-label">AIR FLOW IN</span>
+                <div className="display-screen green-lcd" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '2px', minWidth: '75px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span className="screen-val" style={{ color: 'var(--accent-green)', textShadow: '0 0 5px rgba(16,185,129,0.8)' }}>{airDisplayLpm.toFixed(2)}</span>
+                    <span className="screen-unit">L/min</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid rgba(16,185,129,0.2)', paddingTop: '2px' }}>
+                    <span className="screen-val" style={{ color: 'var(--accent-green)', textShadow: '0 0 5px rgba(16,185,129,0.8)' }}>{calculatedVvm}</span>
+                    <span className="screen-unit">vvm</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Air Outlet Flow slpm Box Overlaid on Outlet Pipe */}
+              <div className={`air-outlet-display ${showAirOutWarning ? 'air-outlet-warning-flashing' : ''}`}>
+                <span className="display-label">AIR OUT (PMa)</span>
+                <div className="display-screen blue-lcd">
+                  <span className="screen-val">{air_out_read.toFixed(1)}</span>
+                  <span className="screen-unit">PMa</span>
+                </div>
+                {showAirOutWarning && (
+                  <span style={{ fontSize: '0.6rem', color: '#ff3e3e', fontWeight: 'bold', marginTop: '2px', textAlign: 'center' }}>
+                    ⚠️ ระวัง! RPM & AIR สูง
+                  </span>
+                )}
+              </div>
+            </>
+          )}
 
         </div>
 
