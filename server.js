@@ -454,9 +454,10 @@ const saveSettings = async (settings) => {
   writeLocalDB(localDB);
 };
 
-// ──────────────────────────────────────────────────────────
-// API Routes
-// ──────────────────────────────────────────────────────────
+// Health check endpoint (used to keep server active via Uptime monitoring pings)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
 
 // In-memory active users tracker
 const activeUsers = {};
