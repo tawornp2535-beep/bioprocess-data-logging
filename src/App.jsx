@@ -6511,9 +6511,16 @@ function App() {
                     </div>
                   </div>
                   <ResponsiveContainer width="100%" height="80%">
-                    <LineChart data={chartData}>
+                    <LineChart data={chartData} margin={{ top: 25, right: 10, left: 10, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
+                      <XAxis 
+                        dataKey="cultureHour" 
+                        stroke="var(--text-secondary)" 
+                        tick={{ fontSize: 11 }} 
+                        interval="preserveStartEnd"
+                        minTickGap={45}
+                        tickFormatter={(val) => typeof val === 'number' ? val.toFixed(1) + 'h' : val}
+                      />
                       
                       {/* Left Side Y-Axes */}
                       <YAxis
@@ -6521,30 +6528,27 @@ function App() {
                         orientation="left"
                         stroke="var(--accent-red)"
                         domain={['auto', 'auto']}
-                        tick={{ fontSize: 10 }}
-                        width={40}
+                        tick={{ fontSize: 10, fill: 'var(--accent-red)' }}
+                        width={35}
                         hide={!visibleParameters.temp}
-                        label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft', fill: 'var(--accent-red)', style: { textAnchor: 'middle' } }}
                       />
                       <YAxis
                         yAxisId="ph"
                         orientation="left"
                         stroke="var(--accent-blue)"
                         domain={[4, 10]}
-                        tick={{ fontSize: 10 }}
-                        width={40}
+                        tick={{ fontSize: 10, fill: 'var(--accent-blue)' }}
+                        width={25}
                         hide={!visibleParameters.ph}
-                        label={{ value: 'pH', angle: -90, position: 'insideLeft', fill: 'var(--accent-blue)', style: { textAnchor: 'middle' } }}
                       />
                       <YAxis
                         yAxisId="do"
                         orientation="left"
                         stroke="var(--accent-green)"
                         domain={[0, 100]}
-                        tick={{ fontSize: 10 }}
-                        width={40}
+                        tick={{ fontSize: 10, fill: 'var(--accent-green)' }}
+                        width={30}
                         hide={!visibleParameters.do}
-                        label={{ value: 'DO (%)', angle: -90, position: 'insideLeft', fill: 'var(--accent-green)', style: { textAnchor: 'middle' } }}
                       />
 
                       {/* Right Side Y-Axes */}
@@ -6553,20 +6557,18 @@ function App() {
                         orientation="right"
                         stroke="var(--accent-yellow)"
                         domain={['auto', 'auto']}
-                        tick={{ fontSize: 10 }}
-                        width={45}
+                        tick={{ fontSize: 10, fill: 'var(--accent-yellow)' }}
+                        width={35}
                         hide={!visibleParameters.agit}
-                        label={{ value: 'Agit (RPM)', angle: 90, position: 'insideRight', fill: 'var(--accent-yellow)', style: { textAnchor: 'middle' } }}
                       />
                       <YAxis
                         yAxisId="air"
                         orientation="right"
                         stroke="var(--accent-purple)"
                         domain={['auto', 'auto']}
-                        tick={{ fontSize: 10 }}
-                        width={45}
+                        tick={{ fontSize: 10, fill: 'var(--accent-purple)' }}
+                        width={35}
                         hide={!visibleParameters.air}
-                        label={{ value: 'Air (L/M)', angle: 90, position: 'insideRight', fill: 'var(--accent-purple)', style: { textAnchor: 'middle' } }}
                       />
 
                       <Tooltip content={<CustomTooltip />} />
