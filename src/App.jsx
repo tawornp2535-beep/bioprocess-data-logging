@@ -978,63 +978,53 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 />
               )}
 
-              {/* Telemetry HUD Bar */}
+              {/* Telemetry HUD Bar (Floating mockup style) */}
               <div style={{
                 position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                background: 'rgba(15, 23, 42, 0.85)',
-                backdropFilter: 'blur(6px)',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                padding: '10px 16px',
+                bottom: '16px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '92%',
+                maxWidth: '540px',
+                background: 'rgba(7, 11, 19, 0.85)',
+                backdropFilter: 'blur(8px)',
+                border: '1.5px solid rgba(0, 242, 254, 0.35)',
+                borderRadius: '8px',
+                padding: '8px 16px',
                 display: 'flex',
                 justifyContent: 'space-around',
                 alignItems: 'center',
-                zIndex: 5,
-                gap: '12px'
+                zIndex: 10,
+                boxShadow: '0 4px 20px rgba(0, 242, 254, 0.15), inset 0 0 8px rgba(0,0,0,0.6)'
               }}>
                 {/* Metric 1: Motor RPM */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>MOTOR SPEED</span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#60a5fa', textShadow: '0 0 6px rgba(96,165,250,0.4)' }}>
-                      {isMachineStoppedVisual ? 0 : Math.round(agit_read)}
-                    </span>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>RPM</span>
-                    <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginLeft: '6px' }}>(SV: {Math.round(agit_set)})</span>
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontFamily: 'monospace' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>MOTOR:</span>
+                  <span style={{ color: '#00f2fe', fontWeight: 'bold', textShadow: '0 0 8px rgba(0,242,254,0.6)' }}>
+                    {isMachineStoppedVisual ? 0 : Math.round(agit_read)} RPM
+                  </span>
                 </div>
 
                 {/* Vertical Divider */}
-                <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.08)' }} />
+                <span style={{ color: 'rgba(0, 242, 254, 0.25)', fontSize: '0.9rem' }}>|</span>
 
                 {/* Metric 2: Air Flow In */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>AIR FLOW IN</span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--accent-green)', textShadow: '0 0 6px rgba(16,185,129,0.4)' }}>
-                      {airDisplayLpm.toFixed(2)}
-                    </span>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>L/min</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-green)', marginLeft: '8px' }}>
-                      {calculatedVvm} <span style={{ fontSize: '0.65rem', fontWeight: 400, color: 'var(--text-secondary)' }}>vvm</span>
-                    </span>
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontFamily: 'monospace' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>AIR FLOW:</span>
+                  <span style={{ color: '#10b981', fontWeight: 'bold', textShadow: '0 0 8px rgba(16,185,129,0.6)' }}>
+                    {airDisplayLpm.toFixed(0)} L/min ({calculatedVvm} vvm)
+                  </span>
                 </div>
 
                 {/* Vertical Divider */}
-                <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.08)' }} />
+                <span style={{ color: 'rgba(0, 242, 254, 0.25)', fontSize: '0.9rem' }}>|</span>
 
-                {/* Metric 3: Air Out (Pressure) */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>AIR OUT PRESSURE</span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#fbbf24', textShadow: '0 0 6px rgba(251,191,36,0.4)' }}>
-                      {air_out_read.toFixed(1)}
-                    </span>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>PMa</span>
-                  </div>
+                {/* Metric 3: Air Out */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontFamily: 'monospace' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>AIR OUT:</span>
+                  <span style={{ color: '#3b82f6', fontWeight: 'bold', textShadow: '0 0 8px rgba(59,130,246,0.6)' }}>
+                    {air_out_read.toFixed(1)} PMa
+                  </span>
                 </div>
               </div>
             </div>
