@@ -1819,6 +1819,7 @@ function App() {
 
 
   const [activeTab, setActiveTab] = useState('diagram'); // 'diagram' | 'dashboard' | 'combined' | 'table' | 'ai'
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
   const [settingsTab, setSettingsTab] = useState('business'); // 'business' | 'firebase' | 'ai' | 'password' | 'about'
   // AI Assistant States
   const [aiReport, setAiReport] = useState('');
@@ -6118,9 +6119,238 @@ function App() {
                     <Users size={18} style={{ marginRight: '8px' }} /> แชร์ลูกค้า
                   </button>
                 )}
-                {/* Auto simulation removed */}
+                {currentJob && (
+                  <button
+                    onClick={() => setIsPresentationMode(true)}
+                    style={{
+                      margin: 0,
+                      background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 16px',
+                      height: '38px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      fontFamily: 'inherit',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 0 12px rgba(124,58,237,0.4)'
+                    }}
+                    title="เปิดโหมดนำเสนอจอใหญ่ (กด ESC เพื่อออก)"
+                  >
+                    🖥️ Presentation
+                  </button>
+                )}
               </div>
             </header>
+
+            {/* ============================================================
+                PRESENTATION MODE OVERLAY — Full-screen display for large
+                monitors and conference room presentations.
+                Press ESC or click the ✕ button to exit.
+            ============================================================ */}
+            {isPresentationMode && currentJob && (() => {
+              const dataPoint = chartData.length > 0 ? chartData[chartData.length - 1] : {};
+              const pv = (key, dp = 1) => typeof dataPoint[key] === 'number' ? dataPoint[key].toFixed(dp) : '—';
+              const sp = (key, dp = 1) => typeof dataPoint[key] === 'number' ? dataPoint[key].toFixed(dp) : '—';
+              const machine = machines.find(m => m.id === currentJob.machineId);
+              const cultureHrNow = chartData.length > 0 ? Number(chartData[chartData.length - 1].cultureHour || 0).toFixed(1) : '0.0';
+              const latestRemark = [...(currentJob.data || [])].reverse().find(r => r.remark && r.remark.trim());
+              const metrics = [
+                { label: 'Temperature', unit: '°C', pv: pv('temp_read', 1), sp: sp('temp_set', 1), color: '#ef4444', bg: 'rgba(239,68,68,0.08)', icon: '🌡️' },
+                { label: 'pH', unit: '', pv: pv('ph_read', 2), sp: sp('ph_set', 2), color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', icon: '⚗️' },
+                { label: 'DO', unit: '%', pv: pv('do_read', 1), sp: sp('do_set', 1), color: '#22c55e', bg: 'rgba(34,197,94,0.08)', icon: '🫧' },
+                { label: 'Agitation', unit: 'RPM', pv: typeof dataPoint.agit_read === 'number' ? Math.round(dataPoint.agit_read) : '—', sp: typeof dataPoint.agit_set === 'number' ? Math.round(dataPoint.agit_set) : '—', color: '#eab308', bg: 'rgba(234,179,8,0.08)', icon: '🔄' },
+                { label: 'Air Flow', unit: airUnit === 'mlmin' ? 'mL/min' : 'L/min', pv: pv('air_read', 1), sp: sp('air_set', 1), color: '#a855f7', bg: 'rgba(168,85,247,0.08)', icon: '💨' },
+              ];
+              return (
+                <div
+                  style={{
+                    position: 'fixed', inset: 0, zIndex: 9999,
+                    background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #0a0f1e 100%)',
+                    display: 'flex', flexDirection: 'column',
+                    fontFamily: "'Inter', 'Outfit', sans-serif",
+                    overflow: 'hidden'
+                  }}
+                  onKeyDown={e => e.key === 'Escape' && setIsPresentationMode(false)}
+                  tabIndex={0}
+                >
+                  {/* ── TOP BAR ── */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '14px 28px',
+                    background: 'rgba(15,23,42,0.85)',
+                    borderBottom: '1px solid rgba(99,102,241,0.25)',
+                    backdropFilter: 'blur(12px)',
+                    flexShrink: 0
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <img src="/bioreactor.png" alt="logo" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                          {machine?.name || 'Instrument'}
+                        </div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.01em' }}>
+                          {currentJob.name}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Culture Time</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+                          {cultureHrNow} <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>h</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</div>
+                        <div style={{
+                          fontSize: '0.9rem', fontWeight: 700, padding: '4px 14px', borderRadius: '20px',
+                          background: currentJob.status === 'finished' ? 'rgba(34,197,94,0.15)' : 'rgba(99,102,241,0.15)',
+                          color: currentJob.status === 'finished' ? '#86efac' : '#818cf8',
+                          border: `1px solid ${currentJob.status === 'finished' ? 'rgba(34,197,94,0.3)' : 'rgba(99,102,241,0.3)'}`,
+                          marginTop: '2px'
+                        }}>
+                          {currentJob.status === 'finished' ? '✅ Finished' : '🟢 Running'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Data Points</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f1f5f9' }}>{chartData.length}</div>
+                      </div>
+                      <button
+                        onClick={() => setIsPresentationMode(false)}
+                        style={{
+                          background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                          color: '#fca5a5', borderRadius: '8px', cursor: 'pointer',
+                          width: 38, height: 38, fontSize: '1.1rem', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center'
+                        }}
+                        title="ออกจากโหมดนำเสนอ (ESC)"
+                      >✕</button>
+                    </div>
+                  </div>
+
+                  {/* ── MAIN BODY ── */}
+                  <div style={{ flex: 1, display: 'flex', gap: '16px', padding: '16px 20px', overflow: 'hidden', minHeight: 0 }}>
+
+                    {/* LEFT: Metric Cards */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '280px', flexShrink: 0 }}>
+                      {metrics.map(m => (
+                        <div key={m.label} style={{
+                          background: m.bg,
+                          border: `1px solid ${m.color}33`,
+                          borderRadius: '14px',
+                          padding: '14px 18px',
+                          flex: 1,
+                          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                          position: 'relative', overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            position: 'absolute', right: -10, top: -10,
+                            fontSize: '4rem', opacity: 0.06
+                          }}>{m.icon}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
+                            {m.label}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
+                            <span style={{ fontSize: '2.5rem', fontWeight: 900, color: m.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                              {m.pv}
+                            </span>
+                            <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>{m.unit}</span>
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
+                            SP: <span style={{ color: '#94a3b8', fontWeight: 600 }}>{m.sp} {m.unit}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* RIGHT: Chart */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
+                      <div style={{
+                        flex: 1, background: 'rgba(15,23,42,0.6)', borderRadius: '16px',
+                        border: '1px solid rgba(99,102,241,0.15)', padding: '16px 8px 8px',
+                        display: 'flex', flexDirection: 'column', minHeight: 0
+                      }}>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', paddingLeft: '12px', marginBottom: '6px' }}>
+                          📈 Combined Bioprocess Trend
+                        </div>
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData} margin={{ top: 8, right: 50, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                              <XAxis
+                                dataKey="cultureHour"
+                                stroke="#334155"
+                                tick={{ fontSize: 12, fill: '#64748b' }}
+                                interval="preserveStartEnd"
+                                minTickGap={60}
+                                tickFormatter={v => typeof v === 'number' ? v.toFixed(1) + 'h' : v}
+                              />
+                              <YAxis yAxisId="left" stroke="#334155" tick={{ fontSize: 11, fill: '#64748b' }} width={38} tickFormatter={v => typeof v === 'number' ? v.toFixed(1) : v} />
+                              <YAxis yAxisId="right" orientation="right" stroke="#334155" tick={{ fontSize: 11, fill: '#64748b' }} width={45} tickFormatter={v => typeof v === 'number' ? v.toFixed(0) : v} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '4px' }} />
+                              {visibleParameters.temp && <Line yAxisId="left" type="monotone" dataKey="temp_read" name="TEMP (°C)" stroke="#ef4444" strokeWidth={2.5} dot={false} />}
+                              {visibleParameters.ph && <Line yAxisId="left" type="monotone" dataKey="ph_read" name="pH" stroke="#3b82f6" strokeWidth={2.5} dot={false} />}
+                              {visibleParameters.do && <Line yAxisId="left" type="monotone" dataKey="do_read" name="DO (%)" stroke="#22c55e" strokeWidth={2.5} dot={false} />}
+                              {visibleParameters.agit && <Line yAxisId="right" type="monotone" dataKey="agit_read" name="AGIT (RPM)" stroke="#eab308" strokeWidth={2.5} dot={false} />}
+                              {visibleParameters.air && <Line yAxisId="right" type="monotone" dataKey="air_read" name="Air Flow" stroke="#a855f7" strokeWidth={2.5} dot={false} />}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Bottom row: Remarks + Time */}
+                      <div style={{ display: 'flex', gap: '12px', height: '58px', flexShrink: 0 }}>
+                        <div style={{
+                          flex: 1, background: 'rgba(15,23,42,0.6)', borderRadius: '12px',
+                          border: '1px solid rgba(255,255,255,0.06)', padding: '10px 16px',
+                          display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden'
+                        }}>
+                          <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>📌</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Latest Remark</div>
+                            <div style={{ fontSize: '0.88rem', color: '#e2e8f0', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {latestRemark ? latestRemark.remark : 'ยังไม่มีบันทึกหมายเหตุ'}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{
+                          background: 'rgba(15,23,42,0.6)', borderRadius: '12px',
+                          border: '1px solid rgba(99,102,241,0.15)', padding: '10px 20px',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                        }}>
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>เวลาปัจจุบัน</div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#818cf8', fontVariantNumeric: 'tabular-nums' }}>
+                            {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── FOOTER ── */}
+                  <div style={{
+                    padding: '8px 28px',
+                    background: 'rgba(15,23,42,0.7)',
+                    borderTop: '1px solid rgba(255,255,255,0.04)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    fontSize: '0.72rem', color: '#475569', flexShrink: 0
+                  }}>
+                    <span>SCADA DBMS Bioprocess System · {aboutSystem?.systemVersion || 'v2.5.0'}</span>
+                    <span style={{ color: '#6366f1' }}>กด ESC เพื่อออกจากโหมดนำเสนอ</span>
+                    <span>{new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Global Parameter Visibility Selector Bar */}
             {currentJob && (
