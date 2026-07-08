@@ -6402,6 +6402,7 @@ function App() {
                         tick={{ fontSize: 10, fill: 'var(--accent-red)' }}
                         width={35}
                         hide={!visibleParameters.temp}
+                        tickFormatter={(v) => typeof v === 'number' ? v.toFixed(1) : v}
                       />
                       <YAxis
                         yAxisId="ph"
@@ -6411,6 +6412,7 @@ function App() {
                         tick={{ fontSize: 10, fill: 'var(--accent-blue)' }}
                         width={25}
                         hide={!visibleParameters.ph}
+                        tickFormatter={(v) => typeof v === 'number' ? v.toFixed(1) : v}
                       />
                       <YAxis
                         yAxisId="do"
@@ -6420,6 +6422,7 @@ function App() {
                         tick={{ fontSize: 10, fill: 'var(--accent-green)' }}
                         width={30}
                         hide={!visibleParameters.do}
+                        tickFormatter={(v) => typeof v === 'number' ? v.toFixed(1) : v}
                       />
 
                       {/* Right Side Y-Axes */}
@@ -6431,6 +6434,7 @@ function App() {
                         tick={{ fontSize: 10, fill: 'var(--accent-yellow)' }}
                         width={35}
                         hide={!visibleParameters.agit}
+                        tickFormatter={(v) => typeof v === 'number' ? v.toFixed(1) : v}
                       />
                       <YAxis
                         yAxisId="air"
@@ -6440,6 +6444,7 @@ function App() {
                         tick={{ fontSize: 10, fill: 'var(--accent-purple)' }}
                         width={35}
                         hide={!visibleParameters.air}
+                        tickFormatter={(v) => typeof v === 'number' ? v.toFixed(1) : v}
                       />
 
                       <Tooltip content={<CustomTooltip />} />
