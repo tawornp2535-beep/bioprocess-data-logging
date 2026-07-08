@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine
 } from 'recharts';
 import {
   Activity, Droplets, Wind, Thermometer, RotateCw, PlusCircle,
@@ -225,8 +225,8 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   const air_set = typeof dataPoint.air_set === 'number' ? dataPoint.air_set : 2.0;
   const air_read = typeof dataPoint.air_read === 'number' ? dataPoint.air_read : 2.0;
 
-  const level_set = typeof dataPoint.level_set === 'number' ? dataPoint.level_set : (0.65 * maxVolumeLiters);
-  const level_read = typeof dataPoint.level_read === 'number' ? dataPoint.level_read : (0.65 * maxVolumeLiters);
+  const level_set = typeof dataPoint.level_set === 'number' ? dataPoint.level_set : (0.65 * physicalMaxVolume);
+  const level_read = typeof dataPoint.level_read === 'number' ? dataPoint.level_read : (0.65 * physicalMaxVolume);
   const air_out_set = typeof dataPoint.air_out_set === 'number' ? dataPoint.air_out_set : parseFloat((air_set * 0.96).toFixed(2));
   const air_out_read = typeof dataPoint.air_out_read === 'number' ? dataPoint.air_out_read : parseFloat((air_read * 0.96).toFixed(2));
   const heat_set = typeof dataPoint.heat_set === 'number' ? dataPoint.heat_set : 0.0;
@@ -248,9 +248,9 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
   if (vvmCalcType === 'constant') {
     workingVolumeLiters = aboutSystem?.constantVolumeLiters !== undefined ? Number(aboutSystem.constantVolumeLiters) : 3.5;
   } else {
-    workingVolumeLiters = level_read > 0 ? level_read : maxVolumeLiters;
+    workingVolumeLiters = level_read > 0 ? level_read : physicalMaxVolume;
   }
-  if (workingVolumeLiters <= 0) workingVolumeLiters = 5.0; // protection against zero/negative division
+  if (workingVolumeLiters <= 0) workingVolumeLiters = physicalMaxVolume; // protection against zero/negative division
   const rawVvm = airLitersPerMinute / workingVolumeLiters;
   const calculatedVvm = rawVvm < 0.1 ? rawVvm.toFixed(4) : rawVvm.toFixed(2);
   // Display air flow always in L/min for clarity
@@ -947,16 +947,252 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                 <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                   <div style={{ fontSize: '2.5rem', marginBottom: '12px', color: '#f87171' }}>⚠️</div>
                   <h4 style={{ color: 'white', marginBottom: '6px', fontWeight: 600 }}>Camera Offline</h4>
-                  <p style={{ fontSize: '0.8rem', maxWidth: '240px', margin: '0 auto', lineHeight: 1.4, marginBottom: '12px' }}>
+                  <p style={{ fontSize: '0.8rem', maxWidth: '280px', margin: '0 auto', lineHeight: 1.4, marginBottom: '12px' }}>
                     ไม่สามารถเชื่อมต่อกล้องที่ {cctvUrl} ได้ กรุณาตรวจสอบวง Wi-Fi หรือการตั้งค่า
                   </p>
-                  <button 
-                    onClick={() => setCctvError(false)}
-                    className="btn btn-secondary btn-small"
-                    style={{ margin: '0 auto', fontSize: '0.75rem', height: '28px', padding: '0 10px' }}
-                  >
-                    🔄 ลองเชื่อมต่อใหม่
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                    <button 
+                      onClick={() => setCctvError(false)}
+                      className="btn btn-secondary btn-small"
+                      style={{ fontSize: '0.75rem', height: '28px', padding: '0 12px' }}
+                    >
+                      🔄 ลองเชื่อมต่อใหม่
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        localStorage.setItem('dbms-cctv-url', 'mock');
+                        setCctvError(false);
+                        try {
+                          await fetch('/api/settings/update-vvm', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ cctvUrl: 'mock' })
+                          });
+                        } catch(e) {}
+                        window.location.reload();
+                      }}
+                      className="btn btn-primary btn-small"
+                      style={{ fontSize: '0.75rem', height: '28px', padding: '0 12px', background: 'rgba(0, 242, 254, 0.15)', border: '1px solid #00f2fe', color: '#00f2fe' }}
+                    >
+                      📺 เปิดใช้งานกล้องจำลองสำหรับทดสอบ (Use Mock Camera)
+                    </button>
+                  </div>
+                </div>
+              ) : (cctvUrl.toLowerCase() === 'mock' || cctvUrl.toLowerCase() === 'demo' || cctvUrl.toLowerCase() === 'test') ? (
+                // Case F: Mock CCTV Feed
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  background: '#040810',
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  fontFamily: 'monospace',
+                  color: '#00ff66',
+                  userSelect: 'none'
+                }}>
+                  {/* Grid Background */}
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundImage: 'linear-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 102, 0.05) 1px, transparent 1px)',
+                    backgroundSize: '30px 30px',
+                    pointerEvents: 'none'
+                  }} />
+                  
+                  {/* Scanline overlay */}
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))',
+                    backgroundSize: '100% 4px, 6px 100%',
+                    pointerEvents: 'none'
+                  }} />
+                  
+                  {/* CRT flicker / vignette */}
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    boxShadow: 'inset 0 0 100px rgba(0,0,0,0.8)',
+                    pointerEvents: 'none'
+                  }} />
+
+                  {/* Blinking REC indicator */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '16px',
+                    left: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: '#ef4444',
+                    fontSize: '0.8rem',
+                    fontWeight: 'bold',
+                    zIndex: 5
+                  }}>
+                    <span style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ef4444',
+                      animation: 'blink 1s infinite'
+                    }} />
+                    MOCK REC
+                  </div>
+                  
+                  <style>{`
+                    @keyframes blink {
+                      0%, 100% { opacity: 1; }
+                      50% { opacity: 0; }
+                    }
+                    @keyframes scanline {
+                      0% { transform: translateY(-100%); }
+                      100% { transform: translateY(100%); }
+                    }
+                    @keyframes bubbleUp {
+                      0% { transform: translateY(20px) scale(0.8); opacity: 0; }
+                      50% { opacity: 0.8; }
+                      100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
+                    }
+                    @keyframes rotateImpeller {
+                      from { transform: rotate(0deg); }
+                      to { transform: rotate(360deg); }
+                    }
+                  `}</style>
+
+                  {/* Slow scanning laser bar */}
+                  <div style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    height: '2px',
+                    backgroundColor: 'rgba(0, 255, 102, 0.2)',
+                    boxShadow: '0 0 10px rgba(0, 255, 102, 0.8)',
+                    animation: 'scanline 6s linear infinite',
+                    pointerEvents: 'none'
+                  }} />
+
+                  {/* Camera ID Overlay */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    color: '#cbd5e1',
+                    fontSize: '0.8rem',
+                    zIndex: 5
+                  }}>
+                    CAM_01_LAB
+                  </div>
+
+                  {/* Center Graphic: Bioreactor Vessel Outline */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    position: 'relative',
+                    opacity: 0.65,
+                    transform: 'scale(1.2)'
+                  }}>
+                    <div style={{
+                      width: '80px',
+                      height: '150px',
+                      border: '2px solid #00ff66',
+                      borderRadius: '20px 20px 10px 10px',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      background: 'rgba(0, 255, 102, 0.05)'
+                    }}>
+                      {/* Liquid Media representation */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: '65%',
+                        background: 'rgba(0, 255, 102, 0.25)',
+                        borderTop: '1px solid #00ff66'
+                      }}>
+                        {/* Bubbles animation */}
+                        {[...Array(6)].map((_, i) => (
+                          <div key={i} style={{
+                            position: 'absolute',
+                            bottom: '10px',
+                            left: `${15 + i * 10}px`,
+                            width: `${4 + (i % 3) * 2}px`,
+                            height: `${4 + (i % 3) * 2}px`,
+                            borderRadius: '50%',
+                            backgroundColor: '#00ff66',
+                            animation: `bubbleUp ${2 + (i % 2)}s linear infinite`,
+                            animationDelay: `${i * 0.4}s`
+                          }} />
+                        ))}
+                      </div>
+
+                      {/* Rotating Impeller Shaft and Blades */}
+                      <div style={{
+                        position: 'absolute',
+                        top: '15px',
+                        left: '39px',
+                        width: '2px',
+                        height: '110px',
+                        background: '#00ff66'
+                      }}>
+                        {/* Middle Impeller blade */}
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '40px',
+                          left: '-14px',
+                          width: '30px',
+                          height: '4px',
+                          background: '#00ff66',
+                          animation: 'rotateImpeller 2s linear infinite',
+                          transformOrigin: 'center'
+                        }} />
+                        {/* Bottom Impeller blade */}
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '10px',
+                          left: '-14px',
+                          width: '30px',
+                          height: '4px',
+                          background: '#00ff66',
+                          animation: 'rotateImpeller 2s linear infinite',
+                          transformOrigin: 'center'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Real-time Telemetry Data overlay on bottom left */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '60px',
+                    left: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    fontSize: '0.75rem',
+                    color: '#00ff66',
+                    zIndex: 5
+                  }}>
+                    <div>TEMP: {temp_read.toFixed(1)} °C</div>
+                    <div>PH:   {ph_read.toFixed(2)}</div>
+                    <div>DO:   {do_read.toFixed(1)} %</div>
+                    <div>AGIT: {Math.round(agit_read)} RPM</div>
+                  </div>
+
+                  {/* Message on center screen */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '16px',
+                    color: 'rgba(0, 255, 102, 0.6)',
+                    fontSize: '0.7rem'
+                  }}>
+                    [OFFLINE SIMULATION FEED]
+                  </div>
                 </div>
               ) : cctvUrl.includes('ezviz') || cctvUrl.includes('iframe') || cctvUrl.includes('.html') ? (
                 // Case C: EZVIZ / Cloud Iframe Player
@@ -1901,18 +2137,10 @@ function App() {
       })
       .then(data => {
         if (data) {
-          setAboutSystem({
-            systemName: data.systemName || 'DBMS (Bioprocess Data Logging)',
-            systemVersion: data.systemVersion || 'v2.4.0 (SCADA Polish)',
-            developer: data.developer || 'ทีมวิศวกรรมข้อมูลชีวภาพ (Bioprocess Engineering Team)',
-            techStack: data.techStack || 'React / Vite / Node.js / GCS',
-            supportEmail: data.supportEmail || 'support@bioprocess-logging.local',
-            supportPhone: data.supportPhone || '+66 2 123 4567',
-            vvmCalcType: data.vvmCalcType || 'dynamic',
-            maxVolumeLiters: data.maxVolumeLiters !== undefined ? data.maxVolumeLiters : 5.0,
-            constantVolumeLiters: data.constantVolumeLiters !== undefined ? data.constantVolumeLiters : 3.5,
-            airUnit: data.airUnit || 'mlmin'
-          });
+          setAboutSystem(prev => ({
+            ...prev,
+            ...data
+          }));
         }
       })
       .catch(err => console.error('Error fetching about system settings:', err));
@@ -4639,6 +4867,7 @@ function App() {
                 { id: 'password', icon: '🔒', label: '4. รหัสผ่าน & แอดมิน' },
                 { id: 'about',    icon: 'ℹ️', label: '5. เกี่ยวกับระบบ' },
                 { id: 'cctv',     icon: '📹', label: '6. ตั้งค่ากล้อง CCTV' },
+                { id: 'email',    icon: '📧', label: '7. แจ้งเตือนผ่านอีเมล' },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -5122,6 +5351,135 @@ function App() {
                       {userRole === 'admin' && (
                         <button type="submit" className="btn btn-primary" style={{ width: '100%', margin: '0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                           💾 บันทึกการตั้งค่ากล้อง CCTV
+                        </button>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* === TAB 7: EMAIL NOTIFICATION CONFIG === */}
+              {settingsTab === 'email' && (
+                <div className="settings-panel-grid">
+                  <div className="glass-panel settings-card">
+                    <div className="settings-card-header">
+                      <span className="settings-card-icon" style={{ background: 'rgba(236,72,153,0.15)', color: 'var(--accent-pink)' }}>📧</span>
+                      <div>
+                        <h3>ตั้งค่าระบบแจ้งเตือนทางอีเมล (Email Notifications)</h3>
+                        <p>จัดการการตั้งค่าเซิร์ฟเวอร์อีเมล (SMTP) และผู้รับรายงานผลการรัน</p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const emailSmtpHost = e.target.emailSmtpHost.value;
+                      const emailSmtpPort = e.target.emailSmtpPort.value;
+                      const emailSmtpSecure = e.target.emailSmtpSecure.checked;
+                      const emailSmtpUser = e.target.emailSmtpUser.value;
+                      const emailSmtpPass = e.target.emailSmtpPass.value;
+                      const emailSender = e.target.emailSender.value;
+                      const emailRecipients = e.target.emailRecipients.value;
+                      const emailEnabled = e.target.emailEnabled.checked;
+                      
+                      try {
+                        const res = await fetch('/api/settings/update-email', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ 
+                            emailSmtpHost,
+                            emailSmtpPort,
+                            emailSmtpSecure,
+                            emailSmtpUser,
+                            emailSmtpPass,
+                            emailSender,
+                            emailRecipients,
+                            emailEnabled
+                          })
+                        });
+                        const result = await res.json();
+                        if (res.ok) {
+                          alert('บันทึกการตั้งค่าอีเมลแจ้งเตือนสำเร็จ');
+                          setAboutSystem(result.settings);
+                        } else {
+                          alert(`ผิดพลาด: ${result.error}`);
+                        }
+                      } catch (err) {
+                        alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+                      }
+                    }} className="settings-form">
+                      
+                      <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <input 
+                          type="checkbox" 
+                          name="emailEnabled" 
+                          id="emailEnabled"
+                          checked={aboutSystem.emailEnabled || false}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, emailEnabled: e.target.checked }))} 
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="emailEnabled" style={{ margin: 0, fontWeight: 'bold', cursor: 'pointer' }}>เปิดใช้งานระบบส่งรายงาน PDF และแจ้งเตือนผ่านอีเมลอัตโนมัติเมื่อสิ้นสุดรอบการรัน</label>
+                      </div>
+
+                      <div className="settings-form-group" style={{ marginTop: '1rem' }}>
+                        <label>SMTP Host Server</label>
+                        <input type="text" name="emailSmtpHost" placeholder="เช่น smtp.gmail.com หรือ smtp.mailtrap.io"
+                          value={aboutSystem.emailSmtpHost || ''}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, emailSmtpHost: e.target.value }))} required={aboutSystem.emailEnabled} />
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div className="settings-form-group" style={{ flex: 1, minWidth: '120px' }}>
+                          <label>SMTP Port</label>
+                          <input type="number" name="emailSmtpPort" placeholder="เช่น 465 หรือ 587"
+                            value={aboutSystem.emailSmtpPort !== undefined ? aboutSystem.emailSmtpPort : '465'}
+                            onChange={(e) => setAboutSystem(prev => ({ ...prev, emailSmtpPort: e.target.value }))} required={aboutSystem.emailEnabled} />
+                        </div>
+                        <div className="settings-form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '150px', marginTop: '24px' }}>
+                          <input 
+                            type="checkbox" 
+                            name="emailSmtpSecure" 
+                            id="emailSmtpSecure"
+                            checked={aboutSystem.emailSmtpSecure !== undefined ? aboutSystem.emailSmtpSecure : true}
+                            onChange={(e) => setAboutSystem(prev => ({ ...prev, emailSmtpSecure: e.target.checked }))}
+                            style={{ width: '16px', height: '16px' }}
+                          />
+                          <label htmlFor="emailSmtpSecure" style={{ margin: 0 }}>ใช้งาน SSL/TLS (Secure Connection)</label>
+                        </div>
+                      </div>
+
+                      <div className="settings-form-group">
+                        <label>SMTP Username (บัญชีผู้ส่งอีเมล)</label>
+                        <input type="text" name="emailSmtpUser" placeholder="เช่น sender@gmail.com"
+                          value={aboutSystem.emailSmtpUser || ''}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, emailSmtpUser: e.target.value }))} required={aboutSystem.emailEnabled} />
+                      </div>
+
+                      <div className="settings-form-group">
+                        <label>SMTP Password / App Password (รหัสผ่านอีเมล)</label>
+                        <input type="password" name="emailSmtpPass" placeholder={aboutSystem.emailSmtpPass ? "••••••••••••••••" : "ระบุรหัสผ่านของคุณ"}
+                          value={aboutSystem.emailSmtpPass || ''}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, emailSmtpPass: e.target.value }))} required={aboutSystem.emailEnabled && !aboutSystem.emailSmtpPass} />
+                        <span className="settings-form-hint">หากใช้ Gmail แนะนำให้สร้าง App Password แทนรหัสผ่านหลัก</span>
+                      </div>
+
+                      <div className="settings-form-group">
+                        <label>อีเมลผู้ส่ง (Sender Display Email)</label>
+                        <input type="text" name="emailSender" placeholder="เช่น DBMS Bioprocess System <sender@gmail.com>"
+                          value={aboutSystem.emailSender || ''}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, emailSender: e.target.value }))} required={aboutSystem.emailEnabled} />
+                      </div>
+
+                      <div className="settings-form-group">
+                        <label>อีเมลผู้รับรายงาน (Recipient Emails)</label>
+                        <input type="text" name="emailRecipients" placeholder="เช่น admin@bioprocess.com, customer@gmail.com (คั่นด้วยเครื่องหมายจุลภาค , )"
+                          value={aboutSystem.emailRecipients || ''}
+                          onChange={(e) => setAboutSystem(prev => ({ ...prev, emailRecipients: e.target.value }))} required={aboutSystem.emailEnabled} />
+                        <span className="settings-form-hint">ระบบจะส่งไฟล์สรุปรายงานการรัน PDF แนบไปตามรายชื่ออีเมลเหล่านี้โดยอัตโนมัติ</span>
+                      </div>
+
+                      {userRole === 'admin' && (
+                        <button type="submit" className="btn btn-primary" style={{ width: '100%', margin: '0.5rem 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          💾 บันทึกการตั้งค่าอีเมลแจ้งเตือน
                         </button>
                       )}
                     </form>
@@ -6156,20 +6514,97 @@ function App() {
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                       <XAxis dataKey="cultureHour" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} />
-                      <YAxis yAxisId="left" stroke="var(--text-secondary)" tick={{ fontSize: 12 }} label={{ value: 'TEMP / pH / DO / AIR', angle: -90, position: 'insideLeft', fill: 'var(--text-secondary)' }} />
-                      <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} stroke="var(--text-secondary)" tick={{ fontSize: 12 }} label={{ value: 'AGIT (RPM)', angle: 90, position: 'insideRight', fill: 'var(--text-secondary)' }} />
+                      
+                      {/* Left Side Y-Axes */}
+                      <YAxis
+                        yAxisId="temp"
+                        orientation="left"
+                        stroke="var(--accent-red)"
+                        domain={['auto', 'auto']}
+                        tick={{ fontSize: 10 }}
+                        width={40}
+                        hide={!visibleParameters.temp}
+                        label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft', fill: 'var(--accent-red)', style: { textAnchor: 'middle' } }}
+                      />
+                      <YAxis
+                        yAxisId="ph"
+                        orientation="left"
+                        stroke="var(--accent-blue)"
+                        domain={[4, 10]}
+                        tick={{ fontSize: 10 }}
+                        width={40}
+                        hide={!visibleParameters.ph}
+                        label={{ value: 'pH', angle: -90, position: 'insideLeft', fill: 'var(--accent-blue)', style: { textAnchor: 'middle' } }}
+                      />
+                      <YAxis
+                        yAxisId="do"
+                        orientation="left"
+                        stroke="var(--accent-green)"
+                        domain={[0, 100]}
+                        tick={{ fontSize: 10 }}
+                        width={40}
+                        hide={!visibleParameters.do}
+                        label={{ value: 'DO (%)', angle: -90, position: 'insideLeft', fill: 'var(--accent-green)', style: { textAnchor: 'middle' } }}
+                      />
+
+                      {/* Right Side Y-Axes */}
+                      <YAxis
+                        yAxisId="agit"
+                        orientation="right"
+                        stroke="var(--accent-yellow)"
+                        domain={['auto', 'auto']}
+                        tick={{ fontSize: 10 }}
+                        width={45}
+                        hide={!visibleParameters.agit}
+                        label={{ value: 'Agit (RPM)', angle: 90, position: 'insideRight', fill: 'var(--accent-yellow)', style: { textAnchor: 'middle' } }}
+                      />
+                      <YAxis
+                        yAxisId="air"
+                        orientation="right"
+                        stroke="var(--accent-purple)"
+                        domain={['auto', 'auto']}
+                        tick={{ fontSize: 10 }}
+                        width={45}
+                        hide={!visibleParameters.air}
+                        label={{ value: 'Air (L/M)', angle: 90, position: 'insideRight', fill: 'var(--accent-purple)', style: { textAnchor: 'middle' } }}
+                      />
+
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
-                      {visibleParameters.temp && <Line yAxisId="left" type="monotone" dataKey="temp_read" name="TEMP PV (°C)" stroke="var(--accent-red)" strokeWidth={3} dot={true} />}
-                      {visibleParameters.temp && <Line yAxisId="left" type="monotone" dataKey="temp_set" name="TEMP SV (°C)" stroke="var(--accent-red)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
-                      {visibleParameters.ph && <Line yAxisId="left" type="monotone" dataKey="ph_read" name="pH PV" stroke="var(--accent-blue)" strokeWidth={3} dot={true} />}
-                      {visibleParameters.ph && <Line yAxisId="left" type="monotone" dataKey="ph_set" name="pH SV" stroke="var(--accent-blue)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
-                      {visibleParameters.do && <Line yAxisId="left" type="monotone" dataKey="do_read" name="DO PV (%)" stroke="var(--accent-green)" strokeWidth={3} dot={true} />}
-                      {visibleParameters.do && <Line yAxisId="left" type="monotone" dataKey="do_set" name="DO SV (%)" stroke="var(--accent-green)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
-                      {visibleParameters.agit && <Line yAxisId="right" type="monotone" dataKey="agit_read" name="AGIT PV (RPM)" stroke="var(--accent-yellow)" strokeWidth={3} dot={true} />}
-                      {visibleParameters.agit && <Line yAxisId="right" type="monotone" dataKey="agit_set" name="AGIT SV (RPM)" stroke="var(--accent-yellow)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
-                      {visibleParameters.air && <Line yAxisId="left" type="monotone" dataKey="air_read" name="AIR PV (L/M)" stroke="var(--accent-purple)" strokeWidth={3} dot={true} />}
-                      {visibleParameters.air && <Line yAxisId="left" type="monotone" dataKey="air_set" name="AIR SV (L/M)" stroke="var(--accent-purple)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
+
+                      {visibleParameters.temp && <Line yAxisId="temp" type="monotone" dataKey="temp_read" name="TEMP PV (°C)" stroke="var(--accent-red)" strokeWidth={3} dot={true} />}
+                      {visibleParameters.temp && <Line yAxisId="temp" type="monotone" dataKey="temp_set" name="TEMP SV (°C)" stroke="var(--accent-red)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
+                      {visibleParameters.ph && <Line yAxisId="ph" type="monotone" dataKey="ph_read" name="pH PV" stroke="var(--accent-blue)" strokeWidth={3} dot={true} />}
+                      {visibleParameters.ph && <Line yAxisId="ph" type="monotone" dataKey="ph_set" name="pH SV" stroke="var(--accent-blue)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
+                      {visibleParameters.do && <Line yAxisId="do" type="monotone" dataKey="do_read" name="DO PV (%)" stroke="var(--accent-green)" strokeWidth={3} dot={true} />}
+                      {visibleParameters.do && <Line yAxisId="do" type="monotone" dataKey="do_set" name="DO SV (%)" stroke="var(--accent-green)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
+                      {visibleParameters.agit && <Line yAxisId="agit" type="monotone" dataKey="agit_read" name="AGIT PV (RPM)" stroke="var(--accent-yellow)" strokeWidth={3} dot={true} />}
+                      {visibleParameters.agit && <Line yAxisId="agit" type="monotone" dataKey="agit_set" name="AGIT SV (RPM)" stroke="var(--accent-yellow)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
+                      {visibleParameters.air && <Line yAxisId="air" type="monotone" dataKey="air_read" name="AIR PV (L/M)" stroke="var(--accent-purple)" strokeWidth={3} dot={true} />}
+                      {visibleParameters.air && <Line yAxisId="air" type="monotone" dataKey="air_set" name="AIR SV (L/M)" stroke="var(--accent-purple)" strokeWidth={2} strokeDasharray="5 5" dot={false} />}
+
+                      {/* Event Annotations (Remarks) */}
+                      {chartData.map((row, idx) => {
+                        if (row.remark && row.remark.trim() !== '') {
+                          return (
+                            <ReferenceLine
+                              key={`remark-${idx}`}
+                              x={row.cultureHour}
+                              stroke="var(--accent-amber)"
+                              strokeDasharray="3 3"
+                              strokeWidth={1.5}
+                              label={{
+                                value: `📌 ${row.remark}`,
+                                position: 'top',
+                                fill: 'var(--accent-amber)',
+                                fontSize: 10,
+                                fontWeight: 'bold'
+                              }}
+                            />
+                          );
+                        }
+                        return null;
+                      })}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
