@@ -413,7 +413,7 @@ const getSettings = async () => {
     maxVolumeLiters: 5.0,
     constantVolumeLiters: 3.5,
     airUnit: 'mlmin',
-    cctvUrl: ''
+    cctvUrl: 'https://assets.mixkit.co/videos/preview/mixkit-chemical-laboratory-tubes-48356-large.mp4'
   };
   
   let needsWrite = false;

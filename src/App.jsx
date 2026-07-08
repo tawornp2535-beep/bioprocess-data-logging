@@ -968,8 +968,19 @@ const BSTRDiagram = ({ dataPoint, chartData, isReplaying, isReplayingPlaying, jo
                   style={{ border: 'none', background: '#000' }}
                   onError={() => setCctvError(true)}
                 />
+              ) : (cctvUrl.match(/\.(mp4|webm|ogg|mov)/i) || cctvUrl.includes('mixkit.co')) ? (
+                // Case D: MP4/WebM Video File (for testing and demos)
+                <video
+                  src={cctvUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={() => setCctvError(true)}
+                />
               ) : (
-                // Case D: Local IP MJPEG Stream (like IP Webcam / DroidCam / Tapo converted stream)
+                // Case E: Local IP MJPEG Stream (like IP Webcam / DroidCam / Tapo converted stream)
                 <img
                   src={cctvUrl}
                   alt="CCTV Live Stream"
