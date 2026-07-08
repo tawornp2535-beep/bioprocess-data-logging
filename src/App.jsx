@@ -6165,7 +6165,7 @@ function App() {
                 { label: 'pH', unit: '', pv: pv('ph_read', 2), sp: sp('ph_set', 2), color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', icon: '⚗️' },
                 { label: 'DO', unit: '%', pv: pv('do_read', 1), sp: sp('do_set', 1), color: '#22c55e', bg: 'rgba(34,197,94,0.08)', icon: '🫧' },
                 { label: 'Agitation', unit: 'RPM', pv: typeof dataPoint.agit_read === 'number' ? Math.round(dataPoint.agit_read) : '—', sp: typeof dataPoint.agit_set === 'number' ? Math.round(dataPoint.agit_set) : '—', color: '#eab308', bg: 'rgba(234,179,8,0.08)', icon: '🔄' },
-                { label: 'Air Flow', unit: airUnit === 'mlmin' ? 'mL/min' : 'L/min', pv: pv('air_read', 1), sp: sp('air_set', 1), color: '#a855f7', bg: 'rgba(168,85,247,0.08)', icon: '💨' },
+                { label: 'Air Flow', unit: (aboutSystem?.airUnit || 'mlmin') === 'mlmin' ? 'mL/min' : 'L/min', pv: pv('air_read', 1), sp: sp('air_set', 1), color: '#a855f7', bg: 'rgba(168,85,247,0.08)', icon: '💨' },
               ];
               return (
                 <div
